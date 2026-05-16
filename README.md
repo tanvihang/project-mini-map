@@ -1,1 +1,1 @@
-# project-mini-map
+# Project Mini Map Documentation
