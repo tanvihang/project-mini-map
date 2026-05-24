@@ -4,6 +4,7 @@
 | :---------: | :--------: | :------------------------------------------: | :-------------: |
 |   V1.0.0    | 2026-05-17 | [SeeChen Lee](mailto:[leeseechen@gmail.com]) | Initial version |
 |   V1.0.1    | 2026-05-17 |   [Angus Tan](mailto:[tvhang7@gmail.com])    | Filled in Background & Use Cases |
+|   V1.0.2    | 2026-05-25 | [SeeChen Lee](mailto:[leeseechen@gmail.com]) | Backend architecture: unified data model, MultiCurrency, scope of requirements |
 
 ## Overview
 ### Terminology
@@ -72,12 +73,39 @@ The depth of data required for a genuinely useful virtual travel experience — 
 4. Generate constrained creative output (produce options that are varied, budget-safe, and non-repetitive)
 5. Persist all of this in a structured, queryable database
 
-Google Cloud's **Agent Builder** with **Gemini 2.5 Pro** provides the reasoning layer. **MongoDB Atlas** — via MCP Server, GeoJSON, Vector Search, Atlas Search, and Aggregation — provides the data layer. Together, they make it possible to produce a travel journal that is both deeply personal and factually grounded.
+Google Cloud's **Agent Builder** with **Gemini Pro** provides the reasoning layer. **MongoDB Atlas** — via MCP Server, GeoJSON, Vector Search, Atlas Search, and Aggregation — provides the data layer. Together, they make it possible to produce a travel journal that is both deeply personal and factually grounded.
 
 ---
 
 ## System Requirements Analysis
 ### Scope of Requirements
+
+This release scopes the **MVP happy path** (see [`mvp/Happy-Path.md`](mvp/Happy-Path.md)). The boundary below is deliberate: anything not listed under *In Scope* is explicitly deferred so the submission can be demonstrated end-to-end.
+
+#### Functional Requirements (In Scope)
+
+| ID | Requirement | Source Step |
+| :---: | :--- | :---: |
+| **FR-1** | Accept a free-text trip request and, via the agent, confirm the six required fields (destination, start date, total days, total budget, travel style, interests) before generation. | Happy-Path 1 |
+| **FR-2** | Generate a full day of `nodes` (logistics, five senses, story, dialogue, culture, practical, media) for the current day. | Happy-Path 2 |
+| **FR-3** | Generate exactly 3–4 forward `choices` for the next day, each geographically reachable, budget-safe, and de-duplicated against `visitedTags`. | Happy-Path 4 |
+| **FR-4** | Advance the journey state on user selection and re-generate from the chosen seed until `currentDay == totalDays`. | Happy-Path 5–6 |
+| **FR-5** | Track spend per category against budget in the journey's display currency, surfacing a per-day budget guard. | Happy-Path 4 |
+| **FR-6** | Export the completed journal as a structured real-plan itinerary and stamp the user's passport. | Happy-Path 7 |
+| **FR-7** | Persist all amounts using the **MultiCurrency `Money` model** so figures remain auditable across currencies. | This document |
+
+#### Non-Functional Requirements
+
+| ID | Requirement | Target |
+| :---: | :--- | :--- |
+| **NFR-1 Determinism** | Geographic and budget constraints are enforced by the data layer *before* the agent reasons — the model can never return an unreachable or over-budget option. | 100% of choices pass the guard |
+| **NFR-2 Schema fidelity** | Agent output validates against the `DayNodeResponse` JSON Schema with no stray markdown wrappers. | 100% conformance |
+| **NFR-3 Latency** | Initial day narrative streams to the client without being blocked by media payloads (lazy-loaded assets). | First token < 2s |
+| **NFR-4 Statelessness of frontend** | The frontend holds no MongoDB credentials; it communicates only through structured JSON over the API layer. | Enforced by architecture |
+
+#### Out of Scope (MVP)
+
+User authentication, real photo upload, community/share features, historical travel mode, multi-language UI, native mobile, ambient-sound playback, and real booking links. These mirror the *Out of Scope* list in `mvp/Happy-Path.md`.
 
 ### Use Case Analysis
 
@@ -209,14 +237,14 @@ Project Mini Map relies on a highly integrated, deterministic system dependency 
 ```mermaid
 graph TD
   User[User / Browser] <--> NextJS[Next.js App Router Web Frontend]
-  NextJS <--> AgentBuilder[Google Cloud Agent Builder / Gemini 1.5 Pro]
+  NextJS <--> AgentBuilder[Google Cloud Agent Builder / Gemini Pro]
   AgentBuilder <--> MCPServer[MongoDB MCP Server Backbone]
   MCPServer <--> MongoDB[MongoDB Atlas]
   MCPServer <--> VoyageAI[Voyage AI Embeddings API]
 ```
 
 - **Frontend Connectivity**: Next.js connects via standard TLS to Google Cloud Agent Builder. It is entirely agnostic of MongoDB credentials, communicating through strict structured JSON payloads.
-- **Reasoning Loop**: The Gemini 1.5 Pro engine within Agent Builder relies on the MCP (Model Context Protocol) Server for all tool invocations. The Agent has zero direct network access to Voyage AI or external weather services; all external states are proxied through MCP tool schemas.
+- **Reasoning Loop**: The Gemini Pro engine within Agent Builder relies on the MCP (Model Context Protocol) Server for all tool invocations. The Agent has zero direct network access to Voyage AI or external weather services; all external states are proxied through MCP tool schemas.
 - **Data & Vector Layer**: MongoDB Atlas serves as both the application state store and vector database. Voyage AI provides 1024-dimensional embeddings for semantic visual preference mapping.
 
 ## System Design
@@ -228,7 +256,7 @@ Mini Map is structured using a strict decoupled model where state management, ve
 sequenceDiagram
   autonumber
   actor User as User Frontend (Next.js)
-  participant AB as Agent Builder (Gemini 1.5 Pro)
+  participant AB as Agent Builder (Gemini Pro)
   participant MCP as MongoDB MCP Server
   participant DB as MongoDB Atlas
 
@@ -238,10 +266,10 @@ sequenceDiagram
   DB-->>MCP: Return deterministic locations & vibes
   MCP-->>AB: Structured BSON/JSON context
   AB->>AB: Reason, generate Day Narrative & next Choices
-  AB->>MCP: Save DayNode state (accumulated cost, end coord)
-  MCP->>DB: Write State & Cache Generation
-  AB-->>User: Stream complete JSON (Narrative, Asset Hashes, choices)
-  User->>DB: Asynchronously fetch Base64 Assets (Lazy-load)
+  AB->>MCP: Save nodes + journey state (remainingBudget, currentLocation)
+  MCP->>DB: Write nodes / update journeys
+  AB-->>User: Stream complete JSON (Narrative, media refs, choices)
+  User->>DB: Asynchronously resolve media by hash/URL (Lazy-load)
 ```
 
 This sequence ensures:
@@ -252,23 +280,59 @@ This sequence ensures:
 
 To optimize for token reduction and architectural determinism, Mini-Map employs a NoSQL flexible schema (MongoDB) built around entity references rather than raw text duplication. This allows the Agent to fetch precise sub-documents via MCP instead of loading full histories.
 
-#### Core Entities
+This data model is the **authoritative backend contract**. The frontend never reads these collections directly — it consumes only the JSON shapes returned by the API layer (see [`mvp/Happy-Path.md`](mvp/Happy-Path.md)), which are projections of the documents below.
 
-1. **`UserProfile`**: Represents the user's persistent identity and constraints.
-   - `budgetLimit` (Decimal128): Hard cap for the total trip.
-   - `aestheticVector` (Array[Float]): 1024-dimensional Voyage AI embedding representing their preferred visual/narrative style (e.g., "moody cinematic", "vibrant documentary").
-2. **`Location`**: The deterministic geographic anchor.
-   - `geoPoint` (GeoJSON Point): `[longitude, latitude]` for strict 2dsphere indexing.
-   - `costTier` (Int): 1-5 scale for baseline budget calculations.
-3. **`DayNode`**: A single generated day's state. Linked sequentially.
-   - `journalId` (ObjectId): Reference to the overarching trip.
-   - `dayNumber` (Int): Sequential index.
-   - `narrativeRef` (ObjectId): Reference to the cached text generation.
-   - `accumulatedCost` (Decimal128): Running total at the end of this day.
-   - `endLocation` (GeoJSON Point): Where the user sleeps, dictating the starting constraint for `dayNumber + 1`.
-4. **`AssetCache`**: Reusable media layer for lazy loading.
-   - `assetHash` (String): Unique identifier.
-   - `base64Data` (String): The actual media, loaded asynchronously *after* the initial JSON response to prevent blocking the Agent's reasoning.
+#### Collections
+
+The system uses **four primary collections** plus one backend-internal cache:
+
+1. **`journeys`** — One document per trip; the single source of state for the progressive loop.
+   - `userId` (String) · `sessionId` (String): caller identity (MVP uses a client-supplied `userId`, no auth).
+   - `destination` (String) · `startDate` (Date) · `totalDays` (Int).
+   - `budgetCurrency` (String, ISO 4217): the user's **display currency** — the anchor of the MultiCurrency model.
+   - `totalBudget` / `remainingBudget` (Decimal128, in `budgetCurrency`).
+   - `travelStyle` (String) · `interests` (Array[String]).
+   - `currentDay` (Int) · `currentLocation` (GeoJSON Point): where the user sleeps tonight — the spatial seed for `currentDay + 1`.
+   - `visitedTags` (Array[String]): accumulated experience types, fed to the dedup filter.
+   - `status` (Enum: `ready` | `generating` | `active` | `completed`).
+2. **`nodes`** — Every stop in every day; the core rich content. One document per stop (see the full schema in the [README](README.md#node-document-schema)).
+   - `journeyId` (ObjectId) · `dayNumber` (Int) · `orderInDay` (Int): sequential ordering.
+   - `location` (embedded: `name`, `address`, GeoJSON `Point`).
+   - `price` (`Money`) · `priceCategory` (Enum: `accommodation` | `food` | `transport` | `entry` | `other`).
+   - `senses` · `dialogues` · `culture` · `practical` · `media`: the immersive layers.
+   - `searchTags` (Array[String]): drives Atlas Search + dedup.
+   - `embedding` (Array[Float], 1024-dim): Voyage AI vector for semantic vibe-matching.
+3. **`choices`** — The 3–4 forward options generated per day and which one was taken.
+   - `journeyId` (ObjectId) · `forDay` (Int).
+   - `choices` (Array of embedded option objects: `type`, `title`, `description`, `estimatedCost` (`Money`), `destinationCoordinates` (GeoJSON Point), `tags`, `isRecommended`, `isTightBudget`).
+   - `selectedIndex` (Int | null): set when the user commits.
+4. **`users`** — Persistent identity and the virtual passport.
+   - `userId` (String, unique) · `defaultCurrency` (String, ISO 4217): seeds new journeys' `budgetCurrency`.
+   - `passport.stamps` (Array): `{ destination, coordinates (GeoJSON Point), completedAt, totalDays, totalSpent (Money) }`.
+
+> **`locations`** *(backend-internal, not exposed to the frontend)* — A POI cache populated from Google Places results. Holds `name`, `geoPoint` (GeoJSON Point), `costTier` (Int 1–5), and `tags`. This is the collection `$geoNear` queries to feed the Agent only reachable destinations; caching it in Atlas both showcases the geospatial index and reduces Places API calls.
+
+#### MultiCurrency (`Money`) Model
+
+Travellers budget in their home currency, but real prices come back from pricing APIs in the **destination's** currency (e.g., NPR in Nepal). To keep every figure auditable and avoid lossy rounding, Mini-Map never stores a bare number for money. Every monetary value is the embedded **`Money`** type:
+
+```json
+{
+  "amount": 44.00,                 // value in the journey's budgetCurrency (display)
+  "currency": "MYR",               // ISO 4217, == journeys.budgetCurrency
+  "localAmount": 800.00,           // original amount from the pricing API
+  "localCurrency": "NPR",          // ISO 4217 of the destination
+  "fxRate": 0.055,                 // localCurrency -> currency rate used
+  "asOf": "2026-10-03T08:00:00Z"   // when the rate was captured (rates drift)
+}
+```
+
+Design consequences:
+
+- **Single display currency per journey.** The budget guard math — `(remainingBudget ÷ remainingDays) × 1.5` — runs purely in `budgetCurrency`, so the agent never compares mixed units.
+- **Local origin is preserved.** `localAmount` + `localCurrency` keep the real-world price intact for the export view ("800 NPR ≈ MYR 44"), and `fxRate` + `asOf` make the conversion reproducible if rates are re-checked later.
+- **Conversion happens once, at capture.** The FX API (Fixer.io) is called when a price is first fetched; the rate is frozen into the `Money` document rather than re-converted on every read.
+- **Adapts to any region.** A user budgeting in USD touring Japan stores `{ currency: "USD", localCurrency: "JPY", ... }` with no schema change.
 
 ### System Algorithm
 
@@ -276,16 +340,16 @@ The Agent operates as a state machine, moving the user through the virtual journ
 
 #### Progressive Generation Loop
 
-1. **Initialization**: User submits parameters (Destination, Budget, Days). System creates a `Journal` record and sets state to `DAY_0`.
-2. **Context Assembly**: The MCP server gathers `UserProfile`, current `DayNode.endLocation`, and live constraints (e.g., weather API).
-3. **Agentic Reasoning (Gemini 1.5 Pro)**: The Agent evaluates the context and generates the narrative for `DAY_N`.
+1. **Initialization**: User submits parameters (Destination, Budget, Days). System creates a `journeys` document with `status: generating` and `currentDay: 0`.
+2. **Context Assembly**: The MCP server gathers the `journeys` document, its `currentLocation`, `remainingBudget`, `visitedTags`, and live constraints (e.g., weather API).
+3. **Agentic Reasoning (Gemini Pro)**: The Agent evaluates the context and generates the narrative for `DAY_N`.
 4. **Choice Generation**: The Agent proposes 3-4 options for `DAY_N+1`.
 5. **State Transition**: User selects an option. The state machine transitions to `DAY_N+1`. The cycle repeats until `dayNumber == totalDays`.
 
 #### Deterministic Boundary Enforcement
 
 To eliminate LLM geographical and financial hallucinations, rules are enforced *before* context is sent to the Agent:
-- **Spatial Constraints**: The options for `DAY_N+1` are hard-filtered by a geographic radius from `DAY_N.endLocation`. The Agent cannot suggest a location 500km away for a day trip.
+- **Spatial Constraints**: The options for `DAY_N+1` are hard-filtered by a geographic radius from `journeys.currentLocation` (≤ 200km, the one-day reachable radius). The Agent cannot suggest a location 500km away for a day trip.
 - **Financial Constraints**: If `remainingBudget < projectedCost`, the Agent is forced (via System Prompt instructions injected by the middleware) to generate budget-recovery options (e.g., free walking tours).
 
 ## Implementation Details
@@ -294,10 +358,10 @@ To eliminate LLM geographical and financial hallucinations, rules are enforced *
 The user interface is designed as an immersive Next.js Single Page Application utilizing a sleek dark-mode glassmorphic theme. 
 
 - **Progressive Narrative Rendering**: The Day narrative is rendered word-by-word via React state streams. Choice cards fade in sequentially only after the narrative has completely finished rendering to maintain dramatic progression.
-- **Lazy-Loaded Asset Pipeline**: To prevent massive Base64 payloads from choking the Agent or blocking the initial text stream, the interface decouples text and media:
-  1. The API delivers the journal payload containing unique `assetHash` markers (e.g., `"assetHash": "img_f98c1b"`).
+- **Lazy-Loaded Asset Pipeline**: To keep the agent's context light and avoid blocking the initial text stream, the interface decouples text and media:
+  1. The API delivers the journal payload carrying only lightweight media references (`media.referencePhotos` hashes/URLs, e.g., `"asset_f98c1b"`, and an `ambientSound` URL).
   2. The frontend renders the layout with skeleton placeholders.
-  3. A React `useEffect` hook queries the database asynchronously for the Base64 string matching the hash and swaps out the skeleton.
+  3. A React `useEffect` hook resolves each reference asynchronously — from its source URL (Unsplash/Freesound) or an optional cache — and swaps out the skeleton.
 - **Aesthetic Integration**: Hover states dynamically transition colors using gradient overlays that correspond directly to the user's selected mood (e.g., HSL-tailored warmth for historical tours, neon shadows for urban exploration).
 
 ### System API
@@ -312,15 +376,18 @@ To ensure rigid operational constraints, all communication between the Next.js F
   "type": "object",
   "properties": {
     "destination": { "type": "string", "maxLength": 100 },
-    "durationDays": { "type": "integer", "minimum": 1, "maximum": 14 },
-    "budgetLimit": { "type": "number", "minimum": 100 },
-    "aestheticPreferences": {
+    "startDate": { "type": "string", "format": "date" },
+    "totalDays": { "type": "integer", "minimum": 1, "maximum": 14 },
+    "totalBudget": { "type": "number", "minimum": 100 },
+    "budgetCurrency": { "type": "string", "pattern": "^[A-Z]{3}$", "description": "ISO 4217 display currency (MultiCurrency anchor)" },
+    "travelStyle": { "type": "string" },
+    "interests": {
       "type": "array",
       "items": { "type": "string" },
       "minItems": 1
     }
   },
-  "required": ["destination", "durationDays", "budgetLimit", "aestheticPreferences"]
+  "required": ["destination", "totalDays", "totalBudget", "budgetCurrency", "interests"]
 }
 ```
 
@@ -333,6 +400,7 @@ The Agent is strictly restricted to streaming response objects matching this str
   "type": "object",
   "properties": {
     "dayNumber": { "type": "integer" },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$", "description": "display currency for every amount in this response (== journeys.budgetCurrency)" },
     "narrative": { "type": "string" },
     "localPhrases": {
       "type": "array",
@@ -348,23 +416,25 @@ The Agent is strictly restricted to streaming response objects matching this str
     },
     "costBreakdown": {
       "type": "object",
+      "description": "amounts in `currency`; categories mirror priceCategory",
       "properties": {
         "accommodation": { "type": "number" },
         "food": { "type": "number" },
         "transport": { "type": "number" },
-        "activities": { "type": "number" }
+        "entry": { "type": "number" },
+        "other": { "type": "number" }
       },
-      "required": ["accommodation", "food", "transport", "activities"]
+      "required": ["accommodation", "food", "transport", "entry", "other"]
     },
-    "assets": {
+    "media": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "assetHash": { "type": "string" },
+          "ref": { "type": "string", "description": "asset hash or source URL" },
           "caption": { "type": "string" }
         },
-        "required": ["assetHash", "caption"]
+        "required": ["ref", "caption"]
       }
     },
     "choices": {
@@ -373,9 +443,10 @@ The Agent is strictly restricted to streaming response objects matching this str
         "type": "object",
         "properties": {
           "choiceId": { "type": "string" },
+          "type": { "enum": ["move", "activity", "explore", "slow"] },
           "title": { "type": "string" },
           "description": { "type": "string" },
-          "estimatedCost": { "type": "number" },
+          "estimatedCost": { "type": "number", "description": "in `currency`" },
           "isTightBudget": { "type": "boolean" },
           "destinationCoordinates": {
             "type": "object",
@@ -386,13 +457,13 @@ The Agent is strictly restricted to streaming response objects matching this str
             "required": ["lat", "lon"]
           }
         },
-        "required": ["choiceId", "title", "description", "estimatedCost", "isTightBudget", "destinationCoordinates"]
+        "required": ["choiceId", "type", "title", "description", "estimatedCost", "isTightBudget", "destinationCoordinates"]
       },
-      "minItems": 2,
+      "minItems": 3,
       "maxItems": 4
     }
   },
-  "required": ["dayNumber", "narrative", "localPhrases", "costBreakdown", "assets", "choices"]
+  "required": ["dayNumber", "currency", "narrative", "localPhrases", "costBreakdown", "media", "choices"]
 }
 ```
 
@@ -402,24 +473,39 @@ The system utilizes MongoDB Atlas as its single source of truth and MCP backend,
 
 #### Collections & JSON Schema Validation
 
-MongoDB Schema Validation (`$jsonSchema`) is enforced at the collection level to ensure the Agent's structured outputs never corrupt the data model.
+MongoDB Schema Validation (`$jsonSchema`) is enforced at the collection level to ensure the Agent's structured outputs never corrupt the data model. The validator below guards the `nodes` collection, including the embedded `Money` shape of `price`:
 
 ```json
 {
   "$jsonSchema": {
     "bsonType": "object",
-    "required": ["journalId", "dayNumber", "endLocation"],
+    "required": ["journeyId", "dayNumber", "orderInDay", "location"],
     "properties": {
-      "accumulatedCost": {
-        "bsonType": "decimal",
-        "description": "must be a decimal representing exact fiat currency value"
-      },
-      "endLocation": {
+      "journeyId": { "bsonType": "objectId" },
+      "dayNumber": { "bsonType": "int", "minimum": 1 },
+      "price": {
         "bsonType": "object",
-        "required": ["type", "coordinates"],
+        "required": ["amount", "currency", "localAmount", "localCurrency", "fxRate"],
         "properties": {
-          "type": { "enum": ["Point"] },
-          "coordinates": { "bsonType": "array", "minItems": 2, "maxItems": 2 }
+          "amount": { "bsonType": "decimal", "description": "value in the journey display currency" },
+          "currency": { "bsonType": "string", "description": "ISO 4217 display currency" },
+          "localAmount": { "bsonType": "decimal" },
+          "localCurrency": { "bsonType": "string" },
+          "fxRate": { "bsonType": "double" }
+        }
+      },
+      "location": {
+        "bsonType": "object",
+        "required": ["name", "coordinates"],
+        "properties": {
+          "coordinates": {
+            "bsonType": "object",
+            "required": ["type", "coordinates"],
+            "properties": {
+              "type": { "enum": ["Point"] },
+              "coordinates": { "bsonType": "array", "minItems": 2, "maxItems": 2 }
+            }
+          }
         }
       }
     }
@@ -429,18 +515,18 @@ MongoDB Schema Validation (`$jsonSchema`) is enforced at the collection level to
 
 #### Geospatial Indexes
 
-To enforce physical realism, the `Locations` collection utilizes a `2dsphere` index. The MCP server uses `$geoNear` to feed the Agent only reachable destinations.
+To enforce physical realism, the `locations` POI-cache collection (and `nodes`, for the passport map) carries a `2dsphere` index. The MCP server uses `$geoNear` to feed the Agent only reachable destinations.
 
 ```javascript
-db.Locations.createIndex({ "geoPoint": "2dsphere" });
+db.locations.createIndex({ "geoPoint": "2dsphere" });
 
-// MCP Query Example for Agent Context
-db.Locations.aggregate([
+// MCP Query Example for Agent Context — reachable destinations for the next day
+db.locations.aggregate([
   {
     $geoNear: {
-      near: { type: "Point", coordinates: [ 85.3240, 27.7172 ] }, // Kathmandu
-      distanceField: "dist.calculated",
-      maxDistance: 50000, // 50km max travel radius for one day
+      near: { type: "Point", coordinates: [ 85.3240, 27.7172 ] }, // current location (Kathmandu)
+      distanceField: "dist.meters",
+      maxDistance: 200000, // 200km one-day reachable radius (expands to 400km on empty result)
       spherical: true
     }
   }
@@ -449,31 +535,31 @@ db.Locations.aggregate([
 
 #### Vector Search Indexes
 
-Atlas Vector Search is configured on the `Assets` and `Locations` collections. We map Voyage AI's 1024-dimensional embeddings to perform semantic searches, matching the user's `aestheticVector` with location vibes (e.g., matching a "cyberpunk" preference to neon-lit night markets in Tokyo).
+Atlas Vector Search is configured on the `nodes` collection's `embedding` field. We map Voyage AI's 1024-dimensional embeddings to perform semantic searches, matching the user's interest/aesthetic preferences with location vibes (e.g., matching a "cyberpunk" preference to neon-lit night markets in Tokyo) and excluding already-experienced node types for **deduplication**.
 
-#### Query Optimization (Lazy-loading Base64)
+#### Query Optimization (Lazy-loading Media)
 
-To prevent payload bloat when the Agent reads historical context, the `AssetCache` collection is kept separate from `DayNode`. The Agent only receives `assetHash` references. The frontend application resolves these hashes asynchronously, downloading Base64 strings directly from MongoDB, reducing LLM token consumption by up to 90%.
+To prevent payload bloat when the Agent reads historical context, heavy media is never inlined into `nodes`. The agent's structured output carries only lightweight `media.referencePhotos` hashes/URLs; the frontend resolves them asynchronously after the narrative renders. This keeps the agent's context window — and its token bill — small even on multi-day journeys.
 
 ### System Algorithm
 
 #### Token Reduction Caching Pipeline
 
-Before invoking Gemini 1.5 Pro, the system intercepts the request to check for deterministic cache hits.
+Before invoking Gemini Pro, the system intercepts the request to check for deterministic cache hits.
 
-1. **Hash Generation**: The user's input, current `DayNode`, and constraints are hashed.
+1. **Hash Generation**: The user's input, the current `journeys` state (`currentLocation`, `remainingBudget`, `visitedTags`), and constraints are hashed.
 2. **Cache Lookup**: Query MongoDB `AgentCache` collection for the hash.
 3. **Execution**:
    - *Hit*: Return the pre-generated JSON choices immediately (Token cost: 0).
-   - *Miss*: Invoke Gemini 1.5 Pro via Agent Builder.
+   - *Miss*: Invoke Gemini Pro via Agent Builder.
 4. **Cache Write**: Asynchronously save the new generation back to `AgentCache`.
 
 #### MCP Server Interfacing
 
 The MongoDB MCP Server acts as the rigid backbone connecting the Agent Builder to the database.
 
-1. **Tool Definition**: The MCP server exposes tools like `get_reachable_locations(lon, lat, max_dist)` and `get_budget_status(journal_id)`.
-2. **Function Calling**: Gemini 1.5 Pro determines it needs location data and emits a function call.
+1. **Tool Definition**: The MCP server exposes tools like `get_reachable_locations(lon, lat, max_dist)` and `get_budget_status(journeyId)`.
+2. **Function Calling**: Gemini Pro determines it needs location data and emits a function call.
 3. **Execution**: The MCP server executes the MongoDB aggregation pipeline (e.g., `$geoNear`).
 4. **Response**: The structured BSON response is converted to minimal JSON and returned to the Agent's context window, forcing the Agent to reason only over factually accurate, geographically sound data.
 ### System Testing Analysis

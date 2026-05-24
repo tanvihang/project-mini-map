@@ -36,12 +36,13 @@ POST /api/journeys
 
 **Backend should:**
 
-1. Confirm all required data is present (destination, startDate, totalDays, totalBudget, travelStyle, interests). If not, ask user for missing info before proceeding.
-2. Retrieve the weather data through MCP for destination coordinates
-3. Retrieve the top 5 nearby POIs (Points of Interest) through MCP using Google Places API or any other relevant.
-4. Currency conversion if able.
-5. Create first `journey` document in **MongoDB**
-6. Return shown below to frontend immediately — frontend shows loading state to prevent user waiting without feedback while backend generates Day 1 nodes in Step 2.
+1. Confirm all required data is present (destination, startDate, totalDays, totalBudget, **budgetCurrency**, travelStyle, interests). If not, ask user for missing info before proceeding.
+2. **Normalize currency**: infer `budgetCurrency` (ISO 4217) from the user's text / locale (e.g., "$6000" + Malaysian locale → `MYR`; if ambiguous, ask). This becomes the journey's display currency and the anchor for the MultiCurrency `Money` model.
+3. Retrieve the weather data through MCP for destination coordinates.
+4. Retrieve the top 5 nearby POIs (Points of Interest) through MCP using Google Places API, and **upsert them into the `locations` cache** (with `geoPoint` + tags) so `$geoNear` can serve them in Step 4.
+5. Fetch the destination's local currency + FX rate (Fixer.io) once, so every price captured later can be stored as a full `Money` document.
+6. Create the first `journeys` document in **MongoDB** (`status: "ready"`, `currentDay: 0`, `remainingBudget = totalBudget`).
+7. Return shown below to frontend immediately — frontend shows loading state to prevent user waiting without feedback while backend generates Day 1 nodes in Step 2.
 
 **Agent 1 应该返回给backend**
 
@@ -52,6 +53,7 @@ POST /api/journeys
     "startDate": "2026-10-03",
     "totalDays": 7,
     "totalBudget": 6000,
+    "budgetCurrency": "MYR", // normalized display currency (MultiCurrency anchor)
     "travelStyle": "backpacker", 
     "interests": ["photography", "temples", "local food"]
 }
@@ -66,6 +68,7 @@ POST /api/journeys
     "startDate": "2026-10-03", 
     "totalDays": 7, 
     "totalBudget": 6000, 
+    "budgetCurrency": "MYR", 
     "travelStyle": "backpacker", 
     "interests": ["photography", "temples", "local food"], 
     "status": "ready" 
@@ -82,19 +85,19 @@ POST /api/journeys
 
 **Backend should:**
 
-> Backend Architect Fill in details （以下是claude推荐的我保留，不确定对后端有没有用，可以自行调整）
-
-1. Send prompt to **Gemini Model** via Google Cloud Agent Builder
-2. Parse the JSON response
-3. For each node: call **Voyage AI** to generate a 1024-dim embedding from `senses.story + searchTags.join(" ")` 
-4. Write all nodes to MongoDB via **MCP Server**
-5. Update `journey.currentDay = 1`, `journey.remainingBudget -= dayTotal`, `journey.visitedTags += all node searchTags`
+1. Send the day-generation prompt to the **Gemini** model via Google Cloud Agent Builder.
+2. Parse and validate the JSON response against the `DayNodeResponse` schema (retry once on invalid JSON, then 500).
+3. **Resolve prices**: for each node, convert the local-currency price to the journey's `budgetCurrency` via the cached FX rate and store the full `Money` object (`amount`, `currency`, `localAmount`, `localCurrency`, `fxRate`, `asOf`).
+4. For each node, call **Voyage AI** to generate a 1024-dim embedding from `senses.story + " " + searchTags.join(" ")`.
+5. Write all nodes to the `nodes` collection via the **MCP Server**.
+6. Update the `journeys` document: `currentDay = 1`, `remainingBudget -= dayTotal`, `visitedTags += all node searchTags`, `currentLocation = last node coordinates`, `status = "active"`.
 
 **Response to frontend:**
 
 ```json
 {
   "dayNumber": 1,
+  "currency": "MYR",          // display currency for all amounts below
   "nodes": [ /* array of node documents */ ], 
   "dayTotal": 81,
   "remainingBudget": 5919,
@@ -128,18 +131,16 @@ POST /api/journeys/:journeyId/choices
 
 **Backend should:**
 
-> Backend Architect Fill in details （以下是claude推荐的我保留，不确定对后端有没有用，可以自行调整）
+1. Fetch from the `journeys` document:
+   - `currentLocation` (GeoJSON Point)
+   - `remainingBudget` + `budgetCurrency`
+   - `remainingDays`
+   - `visitedTags`
+   - `interests`
 
-1. Fetch from MongoDB:
-   - `journey.currentLocation` (GeoJSON)
-   - `journey.remainingBudget`
-   - `journey.remainingDays`
-   - `journey.visitedTags`
-   - `journey.interests`
+2. Run **$geoNear Aggregation** on the `locations` cache — keep only POIs reachable within 1 day (`maxDistance: 200000`; if the result is empty, expand to `400000`).
 
-2. Run **Atlas Vector Search** — find destinations within ~200km radius that do NOT share tags with `visitedTags` (deduplication)
-
-3. Run **$geoNear Aggregation** — filter only locations reachable within 1 day of travel from `currentLocation`
+3. Run **Atlas Vector Search** over those candidates — exclude any whose tags overlap `visitedTags` (deduplication), and rank the rest by similarity to the user's `interests`.
 
 4. Call **Gemini** with this prompt:
 
@@ -149,10 +150,10 @@ Generate exactly 4 travel choices for the next day of this journey.
 Current state:
 - Current location: {{currentLocation.name}} ({{lat}}, {{lng}})
 - Remaining days: {{remainingDays}}
-- Remaining budget: {{remainingBudget}} CNY
+- Remaining budget: {{remainingBudget}} {{budgetCurrency}}
 - Already visited experience types: {{visitedTags}}
 - User interests: {{interests}}
-- Nearby reachable destinations (from Atlas): {{nearbyOptions}}
+- Nearby reachable destinations (from Atlas $geoNear): {{nearbyOptions}}
 
 Rules:
 - Each choice must be geographically reachable within 1 day from current location
@@ -202,6 +203,7 @@ Output JSON array of exactly 4 choices:
 ```json
 {
   "forDay": 2,
+  "currency": "MYR",
   "choices": [
     {
       "type": "explore",
@@ -238,14 +240,12 @@ POST /api/journeys/:journeyId/select
 
 **Backend should:**
 
-> Backend Architect Fill in details （以下是claude推荐的我保留，不确定对后端有没有用，可以自行调整）
-
-1. Update `choices` document: set `selectedIndex = 0`
-2. Update `journey` document:
+1. Update the `choices` document: set `selectedIndex = 0`.
+2. Update the `journeys` document:
    - `currentLocation` = selected choice's `destinationCoordinates`
    - `visitedTags` += selected choice's `tags`
-3. Trigger **Step 2 logic** for Day 2 using selected choice as the seed
-4. Return Day 2 nodes (same response shape as Step 2)
+3. Trigger **Step 2 logic** for the next day, using the selected choice as the seed.
+4. Return the next day's nodes (same response shape as Step 2, including `currency`).
 
 ---
 
@@ -271,9 +271,9 @@ POST /api/journeys/:journeyId/export
 **Backend must:**
 
 1. Fetch all nodes for `journeyId` sorted by `dayNumber`, `orderInDay`
-2. Run Aggregation to compute:
-   - Total spent per category (`food`, `transport`, `entry`, `accommodation`)
-   - Total CNY spent vs budget
+2. Run Aggregation to compute (all in the journey's `budgetCurrency`):
+   - Total spent per category (`accommodation`, `food`, `transport`, `entry`, `other`)
+   - Total spent vs budget
 3. Format into a structured itinerary object
 4. Return JSON for frontend to render
 
@@ -284,8 +284,9 @@ POST /api/journeys/:journeyId/export
   "journeyId": "abc123",
   "destination": "Kathmandu, Nepal",
   "dates": "Oct 3–10, 2026",
-  "totalSpentCNY": 3840,
-  "totalBudgetCNY": 6000,
+  "currency": "MYR",
+  "totalSpent": 3840,
+  "totalBudget": 6000,
   "budgetByCategory": {
     "accommodation": 520,
     "food": 420,
@@ -298,14 +299,14 @@ POST /api/journeys/:journeyId/export
       "dayNumber": 1,
       "date": "2026-10-03",
       "title": "Arrival — Thamel District",
-      "totalCNY": 81,
+      "dayTotal": 81,
       "nodes": [
         {
           "time": "14:30",
           "title": "Land at Tribhuvan Airport",
           "address": "Kathmandu, Nepal",
           "price": "Free",
-          "transport": "Taxi — 800 NPR (~¥44)",
+          "transport": "Taxi — 800 NPR (~MYR 44)",
           "tip": "Fixed-price taxi from official counter, avoid touts",
           "bookingRequired": false
         }
@@ -330,7 +331,7 @@ POST /api/journeys/:journeyId/export
         "coordinates": { "type": "Point", "coordinates": [85.3240, 27.7172] },
         "completedAt": "ISODate",
         "totalDays": 7,
-        "totalSpentCNY": 3840
+        "totalSpent": { "amount": 3840, "currency": "MYR" }
       }
     ]
   }
@@ -341,7 +342,7 @@ POST /api/journeys/:journeyId/export
 
 ## API Summary
 
-> Backend Architect Fill in details （以下是claude推荐的我保留，不确定对后端有没有用，可以自行调整）
+All monetary fields in responses are in the journey's `budgetCurrency`; each response echoes a top-level `currency`. Captured node prices additionally carry the full `Money` object (local amount + FX rate).
 
 | Method | Endpoint                        | Step | Description                           |
 | ------ | ------------------------------- | ---- | ------------------------------------- |
@@ -356,35 +357,30 @@ POST /api/journeys/:journeyId/export
 
 ## MongoDB Collections Summary
 
-> Backend Architect Fill in details （以下是claude推荐的我保留，不确定对后端有没有用，可以自行调整）
-
-| Collection | Purpose                                                |
-| ---------- | ------------------------------------------------------ |
-| `journeys` | Journey metadata, current state, remaining budget/days |
-| `nodes`    | Every stop in every day — the core data                |
-| `choices`  | Generated choice cards per day, which was selected     |
-| `users`    | User profile + passport stamps                         |
+| Collection  | Purpose                                                       |
+| ----------- | ------------------------------------------------------------- |
+| `journeys`  | Journey metadata, current state, remaining budget/days        |
+| `nodes`     | Every stop in every day — the core data                       |
+| `choices`   | Generated choice cards per day, which was selected            |
+| `users`     | User profile + passport stamps                                |
+| `locations` | Backend-internal POI cache (from Google Places) for `$geoNear` |
 
 ---
 
 ## External APIs Required
 
-> Backend Architect Fill in details （以下是claude推荐的我保留，不确定对后端有没有用，可以自行调整）
-
-| API                           | Used For                        | Free Tier         |
-| ----------------------------- | ------------------------------- | ----------------- |
-| OpenWeather API               | 7-day forecast per destination  | 1,000 calls/day   |
-| Google Places API             | Nearby POIs to seed Gemini      | $200 credit/month |
-| Hostelworld API / Booking.com | Real accommodation pricing      | Partner access    |
-| Fixer.io                      | Live CNY ↔ local currency rates | 100 calls/month   |
-| Freesound API                 | Ambient sound URLs per location | Free              |
-| Unsplash API                  | Reference photos per location   | 50 req/hour       |
+| API                           | Used For                              | Free Tier         |
+| ----------------------------- | ------------------------------------- | ----------------- |
+| OpenWeather API               | 7-day forecast per destination        | 1,000 calls/day   |
+| Google Places API             | Nearby POIs → cached in `locations`   | $200 credit/month |
+| Hostelworld API / Booking.com | Real accommodation pricing            | Partner access    |
+| Fixer.io                      | Display ↔ local currency FX rates     | 100 calls/month   |
+| Freesound API                 | Ambient sound URLs per location       | Free              |
+| Unsplash API                  | Reference photos per location         | 50 req/hour       |
 
 ---
 
 ## MongoDB Atlas Setup Checklist
-
-> Backend Architect Fill in details （以下是claude推荐的我保留，不确定对后端有没有用，可以自行调整）
 
 ```
 ☐ Create Atlas cluster (M0 free tier is fine for MVP)
@@ -392,8 +388,11 @@ POST /api/journeys/:journeyId/export
    └── Index: nodes.embedding (1024-dim, Voyage AI)
 ☐ Enable Atlas Search
    └── Index: nodes (fields: senses.story, searchTags, location.name)
-☐ Create 2dsphere index on nodes.location.coordinates
+☐ Create 2dsphere index on locations.geoPoint
    └── Enables $geoNear queries for choice generation
+☐ Create 2dsphere index on nodes.location.coordinates
+   └── Powers the passport footprint map
+☐ Apply $jsonSchema validators on journeys + nodes (incl. Money shape)
 ☐ Set up MongoDB MCP Server
    └── Connect to Gemini Agent Builder as a tool
 ☐ Get Voyage AI API key from MongoDB Atlas dashboard
@@ -403,16 +402,15 @@ POST /api/journeys/:journeyId/export
 
 ## Gemini Agent Builder Setup Checklist
 
-> Backend Architect Fill in details （以下是claude推荐的我保留，不确定对后端有没有用，可以自行调整）
-
 ```
 ☐ Create Agent in Google Cloud Vertex AI Agent Builder
-☐ Set model: gemini-1.5-pro
+☐ Set model: latest Gemini Pro available in Agent Builder (do not pin a minor version)
 ☐ Register MCP tools:
-   ├── create_node        (writes a node document to Atlas)
-   ├── get_journey_state  (reads journey metadata)
-   ├── get_visited_tags   (reads journey.visitedTags)
-   └── update_journey     (updates currentLocation, remainingBudget, visitedTags)
+   ├── create_node             (writes a node document to Atlas)
+   ├── get_journey_state       (reads journey metadata)
+   ├── get_visited_tags        (reads journey.visitedTags)
+   ├── get_reachable_locations (runs $geoNear on the locations cache)
+   └── update_journey          (updates currentLocation, remainingBudget, visitedTags)
 ☐ Set temperature: 0.7 (creative but consistent)
 ☐ Set max output tokens: 4096 (enough for 5-node day)
 ```

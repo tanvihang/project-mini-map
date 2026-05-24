@@ -97,23 +97,75 @@ Every completed destination adds a GeoJSON stamp to the user's personal world ma
 
 Mini-Map uses all five core MongoDB capabilities, each mapped to a specific product feature:
 
-> TODO: Backend Architect to fill in the specific role of each MongoDB tool in the Mini-Map architecture here.
-
 | MongoDB Tool                  | Role in Mini-Map |
 | ----------------------------- | ---------------- |
-| **MCP Server**                |                  |
-| **GeoJSON + Atlas**           |                  |
-| **Voyage AI + Vector Search** |                  |
-| **Atlas Search**              |                  |
-| **Aggregation Pipeline**      |                  |
+| **MCP Server**                | The bridge between Gemini (in Agent Builder) and Atlas. Exposes typed tools — `get_reachable_locations`, `get_journey_state`, `create_node`, `update_journey` — so the agent reads and writes documents through validated schemas instead of raw queries. No custom middleware layer. |
+| **GeoJSON + Atlas**           | Every node and passport stamp stores a GeoJSON `Point`. A `2dsphere` index + `$geoNear` restricts each day's choices to destinations physically reachable from where the user slept the night before — the geographic anti-hallucination guard. |
+| **Voyage AI + Vector Search** | Each node's `senses.story` + `searchTags` is embedded into a 1024-dim vector. Vector Search matches the user's interest/aesthetic preferences to location "vibes" and powers **deduplication** — already-experienced node types are excluded from tomorrow's options. |
+| **Atlas Search**              | A full-text index over the saved journal (`senses.story`, `searchTags`, `location.name`) makes a user's entire travel history searchable across every completed trip. |
+| **Aggregation Pipeline**      | Computes budget analytics (spend grouped by category, the remaining-budget-per-day guard) and the final real-plan export. Also aggregates `visitedTags` to feed the dedup filter. |
 
 ### Node Document Schema
 
-Each stop in a journey is a single MongoDB document:
+Each stop in a journey is a single MongoDB document in the `nodes` collection. Monetary values are never bare numbers — they use the embedded **`Money`** type so the system keeps both the user's display currency and the original local-currency figure (see [MultiCurrency](System-Analysis.md#multicurrency-money-model)).
 
 ```json
 {
-    //TODO Backend Architect to fill in the example schema here
+  "_id": "ObjectId",
+  "journeyId": "ObjectId",
+  "dayNumber": 1,
+  "orderInDay": 0,
+  "time": "14:30",
+  "title": "Land at Tribhuvan International Airport",
+  "location": {
+    "name": "Tribhuvan International Airport",
+    "address": "Ring Rd, Kathmandu 44600, Nepal",
+    "coordinates": { "type": "Point", "coordinates": [85.3559, 27.6966] }
+  },
+  "transport": "Prepaid taxi from the official counter",
+  "weather": { "condition": "Clear", "tempC": 22, "source": "OpenWeather" },
+  "priceCategory": "transport",
+  "price": {
+    "amount": 44.0, "currency": "MYR",
+    "localAmount": 800.0, "localCurrency": "NPR",
+    "fxRate": 0.055, "asOf": "2026-10-03T08:00:00Z"
+  },
+  "senses": {
+    "see": "Terraced hills folding into haze as the plane drops toward the valley.",
+    "hear": "The clatter of the baggage belt, horns leaking through the doors.",
+    "smell": "Diesel, incense, and dust — the first breath of Kathmandu.",
+    "taste": "The metallic dryness of altitude on the back of your tongue.",
+    "touch": "Warm vinyl seat of the taxi, the grit of the window crank.",
+    "mood": "Equal parts exhaustion and disbelief that you actually came.",
+    "story": "The doors slide open and Kathmandu arrives all at once..."
+  },
+  "dialogues": [
+    {
+      "speaker": "Taxi driver",
+      "language": "ne",
+      "text": "Thamel? Paltan ho, sajilo cha.",
+      "translation": "Thamel? It's busy, but easy to reach."
+    }
+  ],
+  "culture": {
+    "cultureTips": ["Use the official prepaid taxi counter to avoid touts."],
+    "localPhrase": { "phrase": "Namaste", "pronunciation": "nuh-muh-STAY", "meaning": "Hello / I bow to you" },
+    "dosDonts": { "dos": ["Greet with both palms together"], "donts": ["Don't hand money with your left hand"] }
+  },
+  "practical": {
+    "openingHours": "24h",
+    "crowdLevel": "high",
+    "bestTimeToVisit": "Daytime arrival for the valley view on descent",
+    "photoTip": "Window seat on the left for the Himalaya line.",
+    "bookingRequired": false
+  },
+  "media": {
+    "referencePhotos": ["asset_f98c1b"],
+    "ambientSound": "https://freesound.org/.../airport-ambient.mp3"
+  },
+  "searchTags": ["airport", "arrival", "thamel", "transfer"],
+  "embedding": [0.0123, -0.0456, "... 1024 dims (Voyage AI)"],
+  "createdAt": "ISODate"
 }
 ```
 
@@ -121,39 +173,41 @@ Each stop in a journey is a single MongoDB document:
 
 ## Architecture
 
-> TODO: Backend Architect to verify and refine, this is an example only
+The frontend never touches Atlas directly. It speaks structured JSON to the Next.js API layer, which orchestrates the Gemini agent; the agent reaches data **only** through the MongoDB MCP Server, which enforces the geographic and budget guards before any document is read or written.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                     User (Web App)                      │
 └───────────────────────┬─────────────────────────────────┘
-                        │
+                        │  structured JSON
 ┌───────────────────────▼─────────────────────────────────┐
 │          Google Cloud Agent Builder                     │
-│          Gemini 1.5 Pro                                 │
+│          Gemini Pro (latest via Agent Builder)          │
 └──────┬────────────────┬────────────────┬────────────────┘
        │                │                │
-  Real APIs      MCP Server        Vertex AI
-  (Weather,      (MongoDB          (Embeddings)
-  Hostelworld,    Atlas)
-  Google Places,
+  Real APIs      MCP Server        Vertex AI / Voyage AI
+  (Weather,      (MongoDB          (1024-dim embeddings)
+  Places,         Atlas)
   FX Rate)
        │                │                │
        └────────────────▼────────────────┘
-                        │
+                        │  validated tool calls only
 ┌───────────────────────▼─────────────────────────────────┐
 │                  MongoDB Atlas                          │
 │                                                         │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────┐  │
 │  │  GeoJSON    │  │ Voyage AI +  │  │ Atlas Search  │  │
-│  │  (Passport  │  │ Vector Search│  │ (Journal full-│  │
-│  │   Map)      │  │ (Semantic    │  │  text search) │  │
-│  └─────────────┘  │  discovery)  │  └───────────────┘  │
-│                   └──────────────┘                      │
+│  │  2dsphere   │  │ Vector Search│  │ (Journal full-│  │
+│  │ (geoNear,   │  │ (vibe match  │  │  text search) │  │
+│  │  passport)  │  │  + dedup)    │  └───────────────┘  │
+│  └─────────────┘  └──────────────┘                      │
 │  ┌──────────────────────────────────────────────────┐   │
-│  │  Aggregation Pipeline (Budget analytics,         │   │
-│  │  travel patterns, destination recommendations)   │   │
+│  │  Aggregation Pipeline (budget-by-category,       │   │
+│  │  remaining-per-day guard, real-plan export)      │   │
 │  └──────────────────────────────────────────────────┘   │
+│                                                         │
+│  Collections: journeys · nodes · choices · users        │
+│               locations (POI cache for $geoNear)        │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -198,19 +252,27 @@ yarn install
 
 ```env
 # Google Cloud
-
+GOOGLE_CLOUD_PROJECT=your-project-id
+GOOGLE_APPLICATION_CREDENTIALS=./service-account.json
+VERTEX_AI_LOCATION=us-central1
+AGENT_BUILDER_AGENT_ID=your-agent-id
 
 # MongoDB Atlas
-
+MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/minimap
+MONGODB_DB=minimap
+VOYAGE_API_KEY=your-voyage-key          # issued from the Atlas dashboard
 
 # External APIs
-
+OPENWEATHER_API_KEY=your-key
+GOOGLE_PLACES_API_KEY=your-key
+FX_API_KEY=your-key                     # Fixer.io — drives MultiCurrency conversion
 ```
 
 ### Run
 
 ```bash
-# Start the MCP server
+# Start the MongoDB MCP server (registered as a tool in Agent Builder)
+yarn mcp:start
 
 # Start the web app
 yarn dev
@@ -221,8 +283,6 @@ Open [http://localhost:3000](http://localhost:3000).
 ---
 
 ## Why MongoDB for This?
-
-> TODO: Backend Architect
 
 Travel data is structurally complex and deeply variable — a night in a Kathmandu hostel and a sunrise hike in Nagarkot require completely different fields. MongoDB's flexible document model means we never fight the schema.
 
