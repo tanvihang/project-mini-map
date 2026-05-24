@@ -126,9 +126,10 @@ Each stop in a journey is a single MongoDB document in the `nodes` collection. M
   "weather": { "condition": "Clear", "tempC": 22, "source": "OpenWeather" },
   "priceCategory": "transport",
   "price": {
-    "amount": 44.0, "currency": "MYR",
-    "localAmount": 800.0, "localCurrency": "NPR",
-    "fxRate": 0.055, "asOf": "2026-10-03T08:00:00Z"
+    "display": { "currency": "MYR", "exponent": 2, "minorUnits": 4400,  "major": 44,  "minor": "00" },
+    "local":   { "currency": "NPR", "exponent": 2, "minorUnits": 80000, "major": 800, "minor": "00" },
+    "fxRate": 0.055,
+    "asOf": "2026-10-03T08:00:00Z"
   },
   "senses": {
     "see": "Terraced hills folding into haze as the plane drops toward the valley.",

@@ -132,6 +132,47 @@ User authentication, real photo upload, community/share features, historical tra
 8. At the end: total estimated cost MYR 3,840. Budget: MYR 6,000. The gap becomes the shopping and upgrade fund.
 9. User books the trip.
 
+**Sequence:**
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as Hesitant Planner
+  participant FE as Frontend
+  participant AG as Agent (Gemini Pro)
+  participant MCP as MCP Server
+  participant DB as Atlas
+  participant EXT as External APIs
+
+  U->>FE: "Kathmandu, 7 days, MYR 6,000, temples + photography"
+  FE->>AG: POST /api/journeys {text}
+  AG->>AG: Confirm 6 required fields complete
+  AG->>EXT: Fetch weather, top-5 POIs, FX rate
+  AG->>MCP: create journey + upsert locations cache
+  MCP->>DB: insert journeys (status: ready) + locations
+  AG-->>FE: { journeyId, status: "ready" }
+  AG->>MCP: write Day 1 nodes (price as Money, minor units)
+  MCP->>DB: insert nodes
+  AG-->>FE: Day 1 + remainingBudget
+  loop Days 2..7
+    FE->>AG: POST /choices { forDay }
+    AG->>MCP: $geoNear + Vector Search (reachable, deduped)
+    MCP->>DB: aggregate locations + nodes
+    DB-->>AG: candidate destinations
+    AG-->>FE: 3–4 choice cards
+    U->>FE: select a choice
+    FE->>AG: POST /select { selectedIndex }
+    AG->>MCP: update journey + write next day's nodes
+    MCP->>DB: update journeys / insert nodes
+    AG-->>FE: Day N
+  end
+  FE->>AG: POST /export
+  AG->>MCP: aggregate spend by category (integer minor units)
+  MCP->>DB: $group totals
+  AG-->>FE: real-plan — MYR 3,840 of 6,000
+  U->>U: Books the trip ✅
+```
+
 **Value delivered:**
 
 - Converts abstract interest into felt experience
@@ -168,6 +209,40 @@ User authentication, real photo upload, community/share features, historical tra
 - System suggests: switch 2 nights from hostel to homestay (saves MYR 60), remove one paid attraction
 - User adjusts plan or increases budget
 
+**Sequence:** (focus on the integer budget guard)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as Budget Backpacker
+  participant FE as Frontend
+  participant AG as Agent (Gemini Pro)
+  participant MCP as MCP Server
+  participant DB as Atlas
+
+  U->>FE: "Kathmandu, 7 days, MYR 5,000, backpacker"
+  FE->>AG: POST /api/journeys
+  AG->>MCP: create journey (remainingBudgetMinor: 500000)
+  MCP->>DB: insert journeys
+  loop each day
+    AG->>MCP: write nodes (price in minor units)
+    MCP->>DB: insert nodes; remainingBudgetMinor -= dayTotalMinor
+    AG-->>FE: dayTotal + remainingBudget (MoneyAmount)
+  end
+  Note over AG,DB: Day 3 — budget guard fires
+  FE->>AG: POST /choices { forDay: 4 }
+  AG->>MCP: get_budget_status(journeyId)
+  MCP->>DB: read remainingBudgetMinor=320000, remainingDays=4
+  DB-->>AG: budget state
+  AG->>AG: threshold = 320000×3 ÷ (4×2) = 120000 (MYR 1,200)
+  AG-->>FE: choices ≤ threshold; 1 flagged isTightBudget
+  U->>FE: review category breakdown (entry 24% = budget killer)
+  FE->>AG: POST /export
+  AG->>MCP: $group by priceCategory (integer sums)
+  MCP->>DB: aggregate
+  AG-->>FE: MYR 4,650 — feasible ✅
+```
+
 **Value delivered:**
 - Real cost validation before any money is spent
 - Category-level breakdown identifies where to cut
@@ -199,6 +274,38 @@ User authentication, real photo upload, community/share features, historical tra
 4. User arrives in Nepal having already "had" these conversations virtually
 5. In practice: user uses the Namaste phrase correctly on Day 1, receives a warm response, confidence established
 
+**Sequence:** (focus on the cultural/dialogue layer)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as Solo Traveller
+  participant FE as Frontend
+  participant AG as Agent (Gemini Pro)
+  participant MCP as MCP Server
+  participant DB as Atlas
+
+  U->>FE: "Kathmandu, 10 days, solo, culture/food/photography"
+  FE->>AG: POST /api/journeys
+  AG->>MCP: create journey
+  MCP->>DB: insert journeys
+  AG->>AG: Generate Day 1 arrival node
+  Note right of AG: culture layer —<br/>localPhrase "Namaste",<br/>dosDonts, taxi-driver dialogue
+  AG->>MCP: write nodes (culture + dialogues)
+  MCP->>DB: insert nodes
+  AG-->>FE: Day 1 — phrases + etiquette
+  FE->>AG: POST /choices
+  AG->>MCP: $geoNear reachable sacred sites
+  MCP->>DB: aggregate locations
+  AG-->>FE: choice cards
+  U->>FE: select Pashupatinath
+  FE->>AG: POST /select
+  AG->>MCP: write Day 2 nodes (monk dialogue, riverbank rule)
+  MCP->>DB: insert nodes
+  AG-->>FE: Day 2 — contextual cultural knowledge
+  Note over U: Arrives already having "had" these conversations ✅
+```
+
 **Value delivered:**
 
 - Replaces generic "cultural tips" lists with contextual, narrative knowledge
@@ -224,6 +331,35 @@ User authentication, real photo upload, community/share features, historical tra
 4. The medina node generates a conversation with a carpet merchant — his family history, three generations in the same shop, the difference between machine and hand-knotted wool
 5. User adds the journey to their passport — a stamp for a country they have never entered
 6. Six months later: visa situation resolves. User opens their Mini-Map journal and uses it directly as the basis for the real trip plan.
+
+**Sequence:** (focus on passport persistence + later reuse)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as Constrained Dreamer
+  participant FE as Frontend
+  participant AG as Agent (Gemini Pro)
+  participant MCP as MCP Server
+  participant DB as Atlas
+
+  U->>FE: "Marrakech" (cannot physically travel)
+  FE->>AG: POST /api/journeys
+  AG->>MCP: create journey
+  MCP->>DB: insert journeys
+  AG->>MCP: write Day 1 nodes (Djemaa el-Fna, five senses)
+  MCP->>DB: insert nodes
+  AG-->>FE: immersive Day 1
+  FE->>AG: POST /choices → POST /select "stay in souks"
+  AG->>MCP: write Day 2 nodes (carpet-merchant dialogue)
+  MCP->>DB: insert nodes
+  FE->>AG: POST /export (journey complete)
+  AG->>MCP: aggregate + stamp passport
+  MCP->>DB: push users.passport.stamps (GeoJSON Point)
+  AG-->>FE: completed journal + passport stamp 🛂
+  Note over U,DB: 6 months later — visa resolves
+  U->>FE: reopen journal → basis for the real trip ✅
+```
 
 **Value delivered:**
 - Genuine cultural depth, not a tourism brochure
@@ -290,7 +426,8 @@ The system uses **four primary collections** plus one backend-internal cache:
    - `userId` (String) · `sessionId` (String): caller identity (MVP uses a client-supplied `userId`, no auth).
    - `destination` (String) · `startDate` (Date) · `totalDays` (Int).
    - `budgetCurrency` (String, ISO 4217): the user's **display currency** — the anchor of the MultiCurrency model.
-   - `totalBudget` / `remainingBudget` (Decimal128, in `budgetCurrency`).
+   - `budgetExponent` (Int): minor-unit digits for `budgetCurrency` (MYR=2, JPY=0, BHD=3).
+   - `totalBudgetMinor` / `remainingBudgetMinor` (Long, **integer minor units** of `budgetCurrency` — e.g., MYR 6,000.00 → `600000`). All budget arithmetic is integer-only.
    - `travelStyle` (String) · `interests` (Array[String]).
    - `currentDay` (Int) · `currentLocation` (GeoJSON Point): where the user sleeps tonight — the spatial seed for `currentDay + 1`.
    - `visitedTags` (Array[String]): accumulated experience types, fed to the dedup filter.
@@ -304,35 +441,54 @@ The system uses **four primary collections** plus one backend-internal cache:
    - `embedding` (Array[Float], 1024-dim): Voyage AI vector for semantic vibe-matching.
 3. **`choices`** — The 3–4 forward options generated per day and which one was taken.
    - `journeyId` (ObjectId) · `forDay` (Int).
-   - `choices` (Array of embedded option objects: `type`, `title`, `description`, `estimatedCost` (`Money`), `destinationCoordinates` (GeoJSON Point), `tags`, `isRecommended`, `isTightBudget`).
+   - `choices` (Array of embedded option objects: `type`, `title`, `description`, `estimatedCost` (`MoneyAmount` — a forward estimate, display currency only), `destinationCoordinates` (GeoJSON Point), `tags`, `isRecommended`, `isTightBudget`).
    - `selectedIndex` (Int | null): set when the user commits.
 4. **`users`** — Persistent identity and the virtual passport.
    - `userId` (String, unique) · `defaultCurrency` (String, ISO 4217): seeds new journeys' `budgetCurrency`.
-   - `passport.stamps` (Array): `{ destination, coordinates (GeoJSON Point), completedAt, totalDays, totalSpent (Money) }`.
+   - `passport.stamps` (Array): `{ destination, coordinates (GeoJSON Point), completedAt, totalDays, totalSpent (MoneyAmount — display-currency rollup) }`.
 
 > **`locations`** *(backend-internal, not exposed to the frontend)* — A POI cache populated from Google Places results. Holds `name`, `geoPoint` (GeoJSON Point), `costTier` (Int 1–5), and `tags`. This is the collection `$geoNear` queries to feed the Agent only reachable destinations; caching it in Atlas both showcases the geospatial index and reduces Places API calls.
 
 #### MultiCurrency (`Money`) Model
 
-Travellers budget in their home currency, but real prices come back from pricing APIs in the **destination's** currency (e.g., NPR in Nepal). To keep every figure auditable and avoid lossy rounding, Mini-Map never stores a bare number for money. Every monetary value is the embedded **`Money`** type:
+Travellers budget in their home currency, but real prices come back from pricing APIs in the **destination's** currency (e.g., NPR in Nepal). Two correctness rules drive the design:
+
+1. **No floating point for currency.** Floats cannot represent values like `0.10` exactly, so summing prices accumulates rounding error. The backend therefore **never stores or computes money as a decimal** — every amount is an **integer count of the currency's smallest unit** (its *minor unit*). MYR 44.00 is stored as `4400` (44 × 100); all arithmetic (budget guard, running totals, category rollups) is integer addition/comparison.
+2. **The frontend receives the value pre-split.** So the client never does float math either, the backend returns three values for any displayed amount: the integer total (`4400`), the major part (`44`), and the zero-padded minor part (`"00"`).
+
+##### `MoneyAmount` — a single-currency amount
 
 ```json
 {
-  "amount": 44.00,                 // value in the journey's budgetCurrency (display)
-  "currency": "MYR",               // ISO 4217, == journeys.budgetCurrency
-  "localAmount": 800.00,           // original amount from the pricing API
-  "localCurrency": "NPR",          // ISO 4217 of the destination
-  "fxRate": 0.055,                 // localCurrency -> currency rate used
-  "asOf": "2026-10-03T08:00:00Z"   // when the rate was captured (rates drift)
+  "currency": "MYR",   // ISO 4217
+  "exponent": 2,       // minor-unit digits (MYR=2, JPY=0, BHD=3) — drives the split
+  "minorUnits": 4400,  // AUTHORITATIVE integer total (44.00 MYR). All math uses this.
+  "major": 44,         // minorUnits / 10^exponent  (integer division)
+  "minor": "00"        // minorUnits % 10^exponent, zero-padded to `exponent` digits
+}
+```
+
+`major` and `minor` are derived from `minorUnits` by **integer** division/modulo — `4400 / 100 = 44`, `4400 % 100 = 0 → "00"`. For a zero-exponent currency (JPY ¥1000) the split is `minorUnits: 1000, major: 1000, minor: ""`.
+
+##### `Money` — a captured price (dual currency)
+
+Real prices keep their local origin so the export can show "800 NPR ≈ MYR 44":
+
+```json
+{
+  "display": { "currency": "MYR", "exponent": 2, "minorUnits": 4400,  "major": 44,  "minor": "00" },
+  "local":   { "currency": "NPR", "exponent": 2, "minorUnits": 80000, "major": 800, "minor": "00" },
+  "fxRate": 0.055,                // local -> display ratio, applied ONCE at capture
+  "asOf": "2026-10-03T08:00:00Z"  // when the rate was captured (rates drift)
 }
 ```
 
 Design consequences:
 
-- **Single display currency per journey.** The budget guard math — `(remainingBudget ÷ remainingDays) × 1.5` — runs purely in `budgetCurrency`, so the agent never compares mixed units.
-- **Local origin is preserved.** `localAmount` + `localCurrency` keep the real-world price intact for the export view ("800 NPR ≈ MYR 44"), and `fxRate` + `asOf` make the conversion reproducible if rates are re-checked later.
-- **Conversion happens once, at capture.** The FX API (Fixer.io) is called when a price is first fetched; the rate is frozen into the `Money` document rather than re-converted on every read.
-- **Adapts to any region.** A user budgeting in USD touring Japan stores `{ currency: "USD", localCurrency: "JPY", ... }` with no schema change.
+- **Single display currency per journey.** The budget guard runs purely in `budgetCurrency` minor units and stays integer: `threshold = remainingBudgetMinor × 3 ÷ (remainingDays × 2)` (the `× 1.5` becomes `× 3 ÷ 2`), compared with `estimatedCost.minorUnits`.
+- **`fxRate` is the only non-integer, and it touches money once.** At capture, `display.minorUnits = round(local.minorUnits × fxRate)`. After that the result is a frozen integer; no read path ever re-multiplies or divides money by a fraction.
+- **Local origin is preserved.** `local` + `fxRate` + `asOf` make every conversion auditable and reproducible.
+- **Adapts to any region.** A user budgeting in USD touring Japan stores `display.currency: "USD"` and `local.currency: "JPY"` (with `local.exponent: 0`) — no schema change.
 
 ### System Algorithm
 
@@ -350,7 +506,7 @@ The Agent operates as a state machine, moving the user through the virtual journ
 
 To eliminate LLM geographical and financial hallucinations, rules are enforced *before* context is sent to the Agent:
 - **Spatial Constraints**: The options for `DAY_N+1` are hard-filtered by a geographic radius from `journeys.currentLocation` (≤ 200km, the one-day reachable radius). The Agent cannot suggest a location 500km away for a day trip.
-- **Financial Constraints**: If `remainingBudget < projectedCost`, the Agent is forced (via System Prompt instructions injected by the middleware) to generate budget-recovery options (e.g., free walking tours).
+- **Financial Constraints**: If `remainingBudgetMinor < projectedCostMinor` (integer comparison, minor units), the Agent is forced (via System Prompt instructions injected by the middleware) to generate budget-recovery options (e.g., free walking tours).
 
 ## Implementation Details
 ### System Interface
@@ -378,7 +534,7 @@ To ensure rigid operational constraints, all communication between the Next.js F
     "destination": { "type": "string", "maxLength": 100 },
     "startDate": { "type": "string", "format": "date" },
     "totalDays": { "type": "integer", "minimum": 1, "maximum": 14 },
-    "totalBudget": { "type": "number", "minimum": 100 },
+    "totalBudget": { "type": "integer", "minimum": 100, "description": "whole major-unit amount at the boundary; server converts to integer minor units (totalBudgetMinor)" },
     "budgetCurrency": { "type": "string", "pattern": "^[A-Z]{3}$", "description": "ISO 4217 display currency (MultiCurrency anchor)" },
     "travelStyle": { "type": "string" },
     "interests": {
@@ -393,14 +549,30 @@ To ensure rigid operational constraints, all communication between the Next.js F
 
 #### 2. Day-Node Generation Response (`STREAM /api/trip/day`)
 The Agent is strictly restricted to streaming response objects matching this structure. The MCP middleware validates the stream in real-time.
+Every monetary field is a **`MoneyAmount`** object so the client receives the three values (`minorUnits`, `major`, `minor`) directly and never does float math:
+
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "DayNodeResponse",
   "type": "object",
+  "$defs": {
+    "moneyAmount": {
+      "type": "object",
+      "properties": {
+        "currency":   { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "exponent":   { "type": "integer", "minimum": 0 },
+        "minorUnits": { "type": "integer", "description": "authoritative integer total (e.g. 4400 == MYR 44.00)" },
+        "major":      { "type": "integer", "description": "e.g. 44" },
+        "minor":      { "type": "string",  "description": "zero-padded to exponent, e.g. \"00\"" }
+      },
+      "required": ["currency", "exponent", "minorUnits", "major", "minor"]
+    }
+  },
   "properties": {
     "dayNumber": { "type": "integer" },
     "currency": { "type": "string", "pattern": "^[A-Z]{3}$", "description": "display currency for every amount in this response (== journeys.budgetCurrency)" },
+    "dayTotal": { "$ref": "#/$defs/moneyAmount" },
     "narrative": { "type": "string" },
     "localPhrases": {
       "type": "array",
@@ -416,13 +588,13 @@ The Agent is strictly restricted to streaming response objects matching this str
     },
     "costBreakdown": {
       "type": "object",
-      "description": "amounts in `currency`; categories mirror priceCategory",
+      "description": "each category is a MoneyAmount in `currency`; categories mirror priceCategory",
       "properties": {
-        "accommodation": { "type": "number" },
-        "food": { "type": "number" },
-        "transport": { "type": "number" },
-        "entry": { "type": "number" },
-        "other": { "type": "number" }
+        "accommodation": { "$ref": "#/$defs/moneyAmount" },
+        "food": { "$ref": "#/$defs/moneyAmount" },
+        "transport": { "$ref": "#/$defs/moneyAmount" },
+        "entry": { "$ref": "#/$defs/moneyAmount" },
+        "other": { "$ref": "#/$defs/moneyAmount" }
       },
       "required": ["accommodation", "food", "transport", "entry", "other"]
     },
@@ -446,7 +618,7 @@ The Agent is strictly restricted to streaming response objects matching this str
           "type": { "enum": ["move", "activity", "explore", "slow"] },
           "title": { "type": "string" },
           "description": { "type": "string" },
-          "estimatedCost": { "type": "number", "description": "in `currency`" },
+          "estimatedCost": { "$ref": "#/$defs/moneyAmount" },
           "isTightBudget": { "type": "boolean" },
           "destinationCoordinates": {
             "type": "object",
@@ -463,7 +635,7 @@ The Agent is strictly restricted to streaming response objects matching this str
       "maxItems": 4
     }
   },
-  "required": ["dayNumber", "currency", "narrative", "localPhrases", "costBreakdown", "media", "choices"]
+  "required": ["dayNumber", "currency", "dayTotal", "narrative", "localPhrases", "costBreakdown", "media", "choices"]
 }
 ```
 
@@ -485,13 +657,33 @@ MongoDB Schema Validation (`$jsonSchema`) is enforced at the collection level to
       "dayNumber": { "bsonType": "int", "minimum": 1 },
       "price": {
         "bsonType": "object",
-        "required": ["amount", "currency", "localAmount", "localCurrency", "fxRate"],
+        "description": "Money — integer minor units only, never decimal",
+        "required": ["display", "local", "fxRate"],
         "properties": {
-          "amount": { "bsonType": "decimal", "description": "value in the journey display currency" },
-          "currency": { "bsonType": "string", "description": "ISO 4217 display currency" },
-          "localAmount": { "bsonType": "decimal" },
-          "localCurrency": { "bsonType": "string" },
-          "fxRate": { "bsonType": "double" }
+          "display": {
+            "bsonType": "object",
+            "required": ["currency", "exponent", "minorUnits"],
+            "properties": {
+              "currency":   { "bsonType": "string" },
+              "exponent":   { "bsonType": "int", "minimum": 0 },
+              "minorUnits": { "bsonType": "long", "description": "integer total in smallest unit — no decimals" },
+              "major":      { "bsonType": "long" },
+              "minor":      { "bsonType": "string" }
+            }
+          },
+          "local": {
+            "bsonType": "object",
+            "required": ["currency", "exponent", "minorUnits"],
+            "properties": {
+              "currency":   { "bsonType": "string" },
+              "exponent":   { "bsonType": "int", "minimum": 0 },
+              "minorUnits": { "bsonType": "long" },
+              "major":      { "bsonType": "long" },
+              "minor":      { "bsonType": "string" }
+            }
+          },
+          "fxRate": { "bsonType": "double", "description": "applied once at capture; result is integer minorUnits" },
+          "asOf":   { "bsonType": "date" }
         }
       },
       "location": {

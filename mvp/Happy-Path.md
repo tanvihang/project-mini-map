@@ -41,7 +41,7 @@ POST /api/journeys
 3. Retrieve the weather data through MCP for destination coordinates.
 4. Retrieve the top 5 nearby POIs (Points of Interest) through MCP using Google Places API, and **upsert them into the `locations` cache** (with `geoPoint` + tags) so `$geoNear` can serve them in Step 4.
 5. Fetch the destination's local currency + FX rate (Fixer.io) once, so every price captured later can be stored as a full `Money` document.
-6. Create the first `journeys` document in **MongoDB** (`status: "ready"`, `currentDay: 0`, `remainingBudget = totalBudget`).
+6. Create the first `journeys` document in **MongoDB** (`status: "ready"`, `currentDay: 0`, `remainingBudgetMinor = totalBudgetMinor`, storing budget as integer minor units).
 7. Return shown below to frontend immediately — frontend shows loading state to prevent user waiting without feedback while backend generates Day 1 nodes in Step 2.
 
 **Agent 1 应该返回给backend**
@@ -87,20 +87,22 @@ POST /api/journeys
 
 1. Send the day-generation prompt to the **Gemini** model via Google Cloud Agent Builder.
 2. Parse and validate the JSON response against the `DayNodeResponse` schema (retry once on invalid JSON, then 500).
-3. **Resolve prices**: for each node, convert the local-currency price to the journey's `budgetCurrency` via the cached FX rate and store the full `Money` object (`amount`, `currency`, `localAmount`, `localCurrency`, `fxRate`, `asOf`).
+3. **Resolve prices**: for each node, take the local-currency price as integer minor units (`local.minorUnits`), convert to the journey's `budgetCurrency` via the cached FX rate, round to integer `display.minorUnits`, and store the full `Money` object (`display`, `local`, `fxRate`, `asOf`).
 4. For each node, call **Voyage AI** to generate a 1024-dim embedding from `senses.story + " " + searchTags.join(" ")`.
 5. Write all nodes to the `nodes` collection via the **MCP Server**.
-6. Update the `journeys` document: `currentDay = 1`, `remainingBudget -= dayTotal`, `visitedTags += all node searchTags`, `currentLocation = last node coordinates`, `status = "active"`.
+6. Update the `journeys` document (integer math): `currentDay = 1`, `remainingBudgetMinor -= dayTotalMinor`, `visitedTags += all node searchTags`, `currentLocation = last node coordinates`, `status = "active"`.
 
 **Response to frontend:**
+
+> All money is a **`MoneyAmount`** — integer `minorUnits` plus the pre-split `major` / `minor` the UI renders (see [MultiCurrency](../System-Analysis.md#multicurrency-money-model)). MYR 81.00 → `minorUnits: 8100`.
 
 ```json
 {
   "dayNumber": 1,
   "currency": "MYR",          // display currency for all amounts below
   "nodes": [ /* array of node documents */ ], 
-  "dayTotal": 81,
-  "remainingBudget": 5919,
+  "dayTotal":        { "currency": "MYR", "exponent": 2, "minorUnits": 8100,   "major": 81,   "minor": "00" },
+  "remainingBudget": { "currency": "MYR", "exponent": 2, "minorUnits": 591900, "major": 5919, "minor": "00" },
   "remainingDays": 6
 }
 ```
@@ -170,7 +172,7 @@ Output JSON array of exactly 4 choices:
     "type": "move | activity | explore | slow",
     "title": "string (max 8 words)",
     "description": "2 sentences, vivid and specific",
-    "estimatedCost": number,
+    "estimatedCost": number,  // whole major-unit estimate (e.g. 120); backend converts to a MoneyAmount in minor units
     "travelTimeFromCurrent": "string (e.g. '1.5hr bus')",
     "destinationCoordinates": { "type": "Point", "coordinates": [lng, lat] },
     "destinationName": "string",
@@ -209,7 +211,7 @@ Output JSON array of exactly 4 choices:
       "type": "explore",
       "title": "Boudhanath Stupa + Pashupatinath Temple",
       "description": "Two of Kathmandu's most powerful sacred sites in one day. A giant white stupa and an open-air cremation ground on the same riverbank — nothing prepares you for either.",
-      "estimatedCost": 120,
+      "estimatedCost": { "currency": "MYR", "exponent": 2, "minorUnits": 12000, "major": 120, "minor": "00" },
       "travelTimeFromCurrent": "20min taxi",
       "destinationCoordinates": { "type": "Point", "coordinates": [85.3621, 27.7215] },
       "destinationName": "Boudhanath, Kathmandu",
@@ -218,7 +220,7 @@ Output JSON array of exactly 4 choices:
     }
     // ... 3 more choices
   ],
-  "remainingBudget": 5919,
+  "remainingBudget": { "currency": "MYR", "exponent": 2, "minorUnits": 591900, "major": 5919, "minor": "00" },
   "remainingDays": 6
 }
 ```
@@ -285,21 +287,21 @@ POST /api/journeys/:journeyId/export
   "destination": "Kathmandu, Nepal",
   "dates": "Oct 3–10, 2026",
   "currency": "MYR",
-  "totalSpent": 3840,
-  "totalBudget": 6000,
+  "totalSpent":  { "currency": "MYR", "exponent": 2, "minorUnits": 384000, "major": 3840, "minor": "00" },
+  "totalBudget": { "currency": "MYR", "exponent": 2, "minorUnits": 600000, "major": 6000, "minor": "00" },
   "budgetByCategory": {
-    "accommodation": 520,
-    "food": 420,
-    "transport": 250,
-    "entry": 310,
-    "other": 140
+    "accommodation": { "currency": "MYR", "exponent": 2, "minorUnits": 52000, "major": 520, "minor": "00" },
+    "food":          { "currency": "MYR", "exponent": 2, "minorUnits": 42000, "major": 420, "minor": "00" },
+    "transport":     { "currency": "MYR", "exponent": 2, "minorUnits": 25000, "major": 250, "minor": "00" },
+    "entry":         { "currency": "MYR", "exponent": 2, "minorUnits": 31000, "major": 310, "minor": "00" },
+    "other":         { "currency": "MYR", "exponent": 2, "minorUnits": 14000, "major": 140, "minor": "00" }
   },
   "days": [
     {
       "dayNumber": 1,
       "date": "2026-10-03",
       "title": "Arrival — Thamel District",
-      "dayTotal": 81,
+      "dayTotal": { "currency": "MYR", "exponent": 2, "minorUnits": 8100, "major": 81, "minor": "00" },
       "nodes": [
         {
           "time": "14:30",
@@ -331,7 +333,7 @@ POST /api/journeys/:journeyId/export
         "coordinates": { "type": "Point", "coordinates": [85.3240, 27.7172] },
         "completedAt": "ISODate",
         "totalDays": 7,
-        "totalSpent": { "amount": 3840, "currency": "MYR" }
+        "totalSpent": { "currency": "MYR", "exponent": 2, "minorUnits": 384000, "major": 3840, "minor": "00" }
       }
     ]
   }
@@ -342,7 +344,7 @@ POST /api/journeys/:journeyId/export
 
 ## API Summary
 
-All monetary fields in responses are in the journey's `budgetCurrency`; each response echoes a top-level `currency`. Captured node prices additionally carry the full `Money` object (local amount + FX rate).
+Every monetary field in a response is a **`MoneyAmount`** object — integer `minorUnits` plus the pre-split `major`/`minor` for display (MYR 44.00 → `{ minorUnits: 4400, major: 44, minor: "00" }`). The backend never uses floats for currency; all sums and the budget guard run in integer minor units. Captured node prices use the dual-currency **`Money`** type (`display` + `local` + `fxRate`) to preserve the original local price. See [MultiCurrency](../System-Analysis.md#multicurrency-money-model).
 
 | Method | Endpoint                        | Step | Description                           |
 | ------ | ------------------------------- | ---- | ------------------------------------- |
