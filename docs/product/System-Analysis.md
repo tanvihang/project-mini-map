@@ -80,7 +80,7 @@ Google Cloud's **Agent Builder** with **Gemini Pro** provides the reasoning laye
 ## System Requirements Analysis
 ### Scope of Requirements
 
-This release scopes the **MVP happy path** (see [`mvp/Happy-Path.md`](mvp/Happy-Path.md)). The boundary below is deliberate: anything not listed under *In Scope* is explicitly deferred so the submission can be demonstrated end-to-end.
+This release scopes the **MVP happy path** (see [`Happy-Path.md`](Happy-Path.md)). The boundary below is deliberate: anything not listed under *In Scope* is explicitly deferred so the submission can be demonstrated end-to-end.
 
 #### Functional Requirements (In Scope)
 
@@ -105,7 +105,7 @@ This release scopes the **MVP happy path** (see [`mvp/Happy-Path.md`](mvp/Happy-
 
 #### Out of Scope (MVP)
 
-User authentication, real photo upload, community/share features, historical travel mode, multi-language UI, native mobile, ambient-sound playback, and real booking links. These mirror the *Out of Scope* list in `mvp/Happy-Path.md`.
+User authentication, real photo upload, community/share features, historical travel mode, multi-language UI, native mobile, ambient-sound playback, and real booking links. These mirror the *Out of Scope* list in `Happy-Path.md`.
 
 ### Use Case Analysis
 
@@ -417,7 +417,7 @@ This sequence ensures:
 
 To optimize for token reduction and architectural determinism, Mini-Map employs a NoSQL flexible schema (MongoDB) built around entity references rather than raw text duplication. This allows the Agent to fetch precise sub-documents via MCP instead of loading full histories.
 
-This data model is the **authoritative backend contract**. The frontend never reads these collections directly — it consumes only the JSON shapes returned by the API layer (see [`mvp/Happy-Path.md`](mvp/Happy-Path.md)), which are projections of the documents below.
+This data model is the **authoritative backend contract**. The frontend never reads these collections directly — it consumes only the JSON shapes returned by the API layer (see [`Happy-Path.md`](Happy-Path.md)), which are projections of the documents below.
 
 #### Collections
 
@@ -433,7 +433,7 @@ The system uses **four primary collections** plus one backend-internal cache:
    - `currentDay` (Int) · `currentLocation` (GeoJSON Point): where the user sleeps tonight — the spatial seed for `currentDay + 1`.
    - `visitedTags` (Array[String]): accumulated experience types, fed to the dedup filter.
    - `status` (Enum: `ready` | `generating` | `active` | `completed`).
-2. **`nodes`** — Every stop in every day; the core rich content. One document per stop (see the full schema in the [README](README.md#node-document-schema)).
+2. **`nodes`** — Every stop in every day; the core rich content. One document per stop (see the full schema in the [README](../../README.md#node-document-schema)).
    - `journeyId` (ObjectId) · `dayNumber` (Int) · `orderInDay` (Int): sequential ordering.
    - `location` (embedded: `name`, `address`, GeoJSON `Point`).
    - `price` (`Money`) · `priceCategory` (Enum: `accommodation` | `food` | `transport` | `entry` | `other`).
@@ -457,7 +457,7 @@ Travellers budget in their home currency, but real prices come back from pricing
 1. **No floating point for currency.** Floats cannot represent values like `0.10` exactly, so summing prices accumulates rounding error. The backend therefore **never stores or computes money as a decimal** — every amount is an **integer count of the currency's smallest unit** (its *minor unit*). MYR 44.00 is stored as `4400` (44 × 100); all arithmetic (budget guard, running totals, category rollups) is integer addition/comparison.
 2. **The frontend receives the value pre-split.** So the client never does float math either, the backend returns three values for any displayed amount: the integer total (`4400`), the major part (`44`), and the zero-padded minor part (`"00"`).
 
-> **Storage vs wire:** the integers below are the *logical* values. In BSON they are stored as `NumberLong`; on the **JSON wire** (MCP + REST) `minorUnits` and `major` are transmitted as **decimal strings** (`"4400"`, `"44"`) to avoid 2⁵³/float loss — `exponent` stays a number. See [`Backend-Coding-Standards.md` §1.2](Backend-Coding-Standards.md).
+> **Storage vs wire:** the integers below are the *logical* values. In BSON they are stored as `NumberLong`; on the **JSON wire** (MCP + REST) `minorUnits` and `major` are transmitted as **decimal strings** (`"4400"`, `"44"`) to avoid 2⁵³/float loss — `exponent` stays a number. See [`Backend-Coding-Standards.md` §1.2](../engineering/Backend-Coding-Standards.md).
 
 ##### `MoneyAmount` — a single-currency amount
 

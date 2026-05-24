@@ -94,7 +94,7 @@ POST /api/journeys
 
 **Response to frontend:**
 
-> All money is a **`MoneyAmount`** — `minorUnits` plus the pre-split `major` / `minor` the UI renders (see [MultiCurrency](../System-Analysis.md#multicurrency-money-model)). On the wire `minorUnits`/`major` are **decimal strings** (precision-safe): MYR 81.00 → `minorUnits: "8100"`.
+> All money is a **`MoneyAmount`** — `minorUnits` plus the pre-split `major` / `minor` the UI renders (see [MultiCurrency](System-Analysis.md#multicurrency-money-model)). On the wire `minorUnits`/`major` are **decimal strings** (precision-safe): MYR 81.00 → `minorUnits: "8100"`.
 
 ```json
 {
@@ -344,7 +344,7 @@ POST /api/journeys/:journeyId/export
 
 ## API Summary
 
-Every monetary field in a response is a **`MoneyAmount`** object — `minorUnits` plus the pre-split `major`/`minor` for display, where `minorUnits`/`major` are sent as **decimal strings** to avoid float/2⁵³ loss (MYR 44.00 → `{ minorUnits: "4400", major: "44", minor: "00" }`). The backend never uses floats for currency; all sums and the budget guard run in integer minor units. Captured node prices use the dual-currency **`Money`** type (`display` + `local` + `fxRate`) to preserve the original local price. See [MultiCurrency](../System-Analysis.md#multicurrency-money-model).
+Every monetary field in a response is a **`MoneyAmount`** object — `minorUnits` plus the pre-split `major`/`minor` for display, where `minorUnits`/`major` are sent as **decimal strings** to avoid float/2⁵³ loss (MYR 44.00 → `{ minorUnits: "4400", major: "44", minor: "00" }`). The backend never uses floats for currency; all sums and the budget guard run in integer minor units. Captured node prices use the dual-currency **`Money`** type (`display` + `local` + `fxRate`) to preserve the original local price. See [MultiCurrency](System-Analysis.md#multicurrency-money-model).
 
 | Method | Endpoint                        | Step | Description                           |
 | ------ | ------------------------------- | ---- | ------------------------------------- |

@@ -107,7 +107,7 @@ Mini-Map uses all five core MongoDB capabilities, each mapped to a specific prod
 
 ### Node Document Schema
 
-Each stop in a journey is a single MongoDB document in the `nodes` collection. Monetary values are never bare numbers — they use the embedded **`Money`** type so the system keeps both the user's display currency and the original local-currency figure (see [MultiCurrency](System-Analysis.md#multicurrency-money-model)).
+Each stop in a journey is a single MongoDB document in the `nodes` collection. Monetary values are never bare numbers — they use the embedded **`Money`** type so the system keeps both the user's display currency and the original local-currency figure (see [MultiCurrency](docs/product/System-Analysis.md#multicurrency-money-model)).
 
 ```json
 {
@@ -229,6 +229,20 @@ The frontend never touches Atlas directly. It speaks structured JSON to the Next
 - [ ] Budget tracker with Aggregation by spend category
 - [ ] Real-plan export
 - [ ] Atlas Search on saved journal history
+
+---
+
+## Documentation
+
+| Doc | Purpose |
+| --- | --- |
+| [System Analysis](docs/product/System-Analysis.md) | Requirements, use cases, architecture, data-model overview, API schemas |
+| [MVP Happy Path](docs/product/Happy-Path.md) | The exact MVP scope — 7-step flow, endpoints, setup checklists |
+| [Data Models](docs/engineering/Data-Models.md) | Authoritative MongoDB schemas, relationships, indexes |
+| [Backend Coding Standards](docs/engineering/Backend-Coding-Standards.md) | Money / geo / validation / error rules for all backend code |
+| [MCP Tools](docs/engineering/MCP-Tools.md) | The five MCP tool contracts the agent calls |
+| [Prompt Engineering](docs/engineering/Prompt-Engineering.md) | System prompts & scenario templates |
+| [Testing Plan](docs/engineering/Testing-Plan.md) | Geo / vector / money / contract test strategy |
 
 ---
 

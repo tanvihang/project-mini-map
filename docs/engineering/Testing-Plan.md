@@ -102,7 +102,7 @@ Purpose: prove that under multi-currency FX and accumulation, Long minor-unit ar
 
 Purpose: stress-test Gemini's streamed JSON for 100% contract compliance.
 
-- **Method:** validate streamed output with **`ajv`** against the published JSON Schemas (`DayNodeResponse`, `TripInitialization`) from [`System-Analysis.md`](System-Analysis.md). *(`ajv` is for contract/conformance testing; runtime boundary validation in production uses Zod — see [`Backend-Coding-Standards.md` §3](Backend-Coding-Standards.md).)*
+- **Method:** validate streamed output with **`ajv`** against the published JSON Schemas (`DayNodeResponse`, `TripInitialization`) from [`System-Analysis.md`](../product/System-Analysis.md). *(`ajv` is for contract/conformance testing; runtime boundary validation in production uses Zod — see [`Backend-Coding-Standards.md` §3](Backend-Coding-Standards.md).)*
 - **Stress scenarios:**
   - A deliberately truncated Gemini stream.
   - Output wrapped in markdown fences (` ```json ... ``` `).

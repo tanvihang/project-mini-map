@@ -282,7 +282,7 @@ When Gemini streams JSON through a Next.js Route, a dropped connection can deliv
 
 ## 9. Configuration & Secrets
 
-- **MUST** read all credentials (MongoDB URI, Voyage key, Google/Vertex, FX key) from environment variables — see the env list in [`README.md`](README.md). Never hardcode or commit secrets.
+- **MUST** read all credentials (MongoDB URI, Voyage key, Google/Vertex, FX key) from environment variables — see the env list in [`README.md`](../../README.md). Never hardcode or commit secrets.
 - **MUST** fail fast at startup if a required env var is missing (validate the process env with a Zod schema too).
 - **MUST NOT** expose MongoDB credentials to the frontend; the browser talks only to the API layer.
 
