@@ -226,7 +226,8 @@ sequenceDiagram
   MCP->>DB: insert journeys
   loop each day
     AG->>MCP: write nodes (price in minor units)
-    MCP->>DB: insert nodes; remainingBudgetMinor -= dayTotalMinor
+    MCP->>DB: insert nodes; 
+    Note over MCP: remainingBudgetMinor -= dayTotalMinor;
     AG-->>FE: dayTotal + remainingBudget (MoneyAmount)
   end
   Note over AG,DB: Day 3 — budget guard fires
@@ -235,7 +236,7 @@ sequenceDiagram
   MCP->>DB: read remainingBudgetMinor=320000, remainingDays=4
   DB-->>AG: budget state
   AG->>AG: threshold = 320000×3 ÷ (4×2) = 120000 (MYR 1,200)
-  AG-->>FE: choices ≤ threshold; 1 flagged isTightBudget
+  AG-->>FE: choices ≤ threshold (1 flagged isTightBudget)
   U->>FE: review category breakdown (entry 24% = budget killer)
   FE->>AG: POST /export
   AG->>MCP: $group by priceCategory (integer sums)
