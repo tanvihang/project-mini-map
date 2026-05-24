@@ -8,19 +8,36 @@ This document establishes the official BSON schemas, validation rules, relations
 
 These nested structures are reused across multiple collections to maintain strict spatial and financial formatting.
 
-### 1. Multi-Currency Money Struct (`Money`)
-Monetary properties must never be stored as simple floats. They are BSON objects combining both the original local currency and the user's localized budget currency, pinned at the transaction exchange rate.
+### 1. Multi-Currency Money Structs (`MoneyAmount` / `Money`)
 
-```json
+Monetary values are **never** stored as floats or decimals. The backend stores an **integer count of the currency's smallest unit** (its *minor unit*) — MYR 44.00 is `4400` (44 × 100) — and all arithmetic (budget guard, running totals, category rollups) is integer addition/comparison. The frontend receives the value **pre-split** into three numbers so it never does float math either: the integer total (`4400`), the major part (`44`), and the zero-padded minor part (`"00"`).
+
+#### `MoneyAmount` — a single-currency amount
+Used for any **displayed** amount: budgets, rollups, and forward estimates.
+
+```javascript
 {
-  "amount": "Decimal128",       // Cost converted to user's display budgetCurrency (e.g. 44.00)
-  "currency": "String",         // User's display currency code (ISO 4217, e.g. "MYR")
-  "localAmount": "Decimal128",  // Original cost in destination currency (e.g. 800.00)
-  "localCurrency": "String",    // Local currency code (ISO 4217, e.g. "NPR")
-  "fxRate": "Decimal128",       // FX rate: localAmount * fxRate = amount (e.g. 0.055)
-  "asOf": "Date"                // Timestamp of FX rate lock
+  "currency": "MYR",                 // String — ISO 4217 display currency
+  "exponent": 2,                     // Int — minor-unit digits (MYR=2, JPY=0, BHD=3); drives the split
+  "minorUnits": NumberLong("4400"),  // Long — AUTHORITATIVE integer total (44.00 MYR). All math uses this.
+  "major": NumberLong("44"),         // Long — minorUnits / 10^exponent (integer division)
+  "minor": "00"                      // String — minorUnits % 10^exponent, zero-padded to `exponent` digits
 }
 ```
+> For a zero-exponent currency (JPY ¥1000): `{ minorUnits: 1000, major: 1000, minor: "" }`.
+
+#### `Money` — a captured price (dual currency)
+Used for **real prices fetched from pricing APIs**, which arrive in the destination's currency. Keeps the local origin so the export can show "800 NPR ≈ MYR 44".
+
+```javascript
+{
+  "display": { "currency": "MYR", "exponent": 2, "minorUnits": NumberLong("4400"),  "major": NumberLong("44"),  "minor": "00" },
+  "local":   { "currency": "NPR", "exponent": 2, "minorUnits": NumberLong("80000"), "major": NumberLong("800"), "minor": "00" },
+  "fxRate": 0.055,                       // Double — local→display ratio, applied ONCE at capture
+  "asOf": ISODate("2026-10-03T08:00:00Z") // Timestamp of FX rate lock (rates drift)
+}
+```
+> `fxRate` is the only non-integer and it touches money exactly once: at capture, `display.minorUnits = round(local.minorUnits × fxRate)`. After that the result is a frozen integer — no read path ever re-multiplies money by a fraction.
 
 ### 2. GeoJSON Point Coordinate Struct (`GeoJSON Point`)
 Standard spatial coordinate syntax compliant with MongoDB `2dsphere` index requirements.
@@ -42,11 +59,17 @@ Standard spatial coordinate syntax compliant with MongoDB `2dsphere` index requi
 
 ```mermaid
 erDiagram
-  users ||--o{ journeys : "creates"
-  journeys ||--o{ nodes : "generates progressively"
-  journeys ||--o{ choices : "presents daily"
-  locations ||--o{ choices : "filters geospatial candidates via geoNear"
+  users      ||--o{ journeys  : "creates"
+  journeys   ||--o{ nodes     : "generates progressively"
+  journeys   ||--o{ choices   : "presents daily"
+  choices    ||--o{ nodes     : "selection seeds next day (seededByChoiceId)"
+  locations  ||--o{ nodes     : "sources POI (placeId)"
+  locations  ||--o{ choices   : "geoNear candidates"
+  AssetCache ||--o{ nodes     : "optional media hot-cache"
 ```
+
+- Solid lines = a stored reference (foreign-key field). `locations → choices` is **advisory** (the choice generator reads `locations` via `$geoNear` but does not persist a per-choice FK back to it).
+- `users.userId` is a frontend-supplied string (MVP, no auth); every other cross-collection link is an `ObjectId`, except `placeId` which is the Google `place_id` string.
 
 ---
 
@@ -75,14 +98,8 @@ Stores persistent user profile states, general interests, and the geographical v
         },
         "completedAt": ISODate("2026-10-10T12:00:00Z"),
         "totalDays": 7,
-        "totalSpent": {
-          "amount": NumberDecimal("3840.00"),
-          "currency": "MYR",
-          "localAmount": NumberDecimal("69818.00"),
-          "localCurrency": "NPR",
-          "fxRate": NumberDecimal("0.055"),
-          "asOf": ISODate("2026-10-03T08:00:00Z")
-        }
+        // MoneyAmount (single display currency) — a trip-wide rollup has no single local currency
+        "totalSpent": { "currency": "MYR", "exponent": 2, "minorUnits": NumberLong("384000"), "major": NumberLong("3840"), "minor": "00" }
       }
     ]
   },
@@ -148,9 +165,10 @@ The state-machine controller storing active session metadata, cumulative budget 
   "startDate": ISODate("2026-10-03T00:00:00Z"),
   "totalDays": 7,
   "currentDay": 1,                            // Current active iteration loop state
-  "totalBudget": NumberDecimal("6000.00"),
-  "remainingBudget": NumberDecimal("5919.00"),// Enforces financial bounds in progressive loops
-  "budgetCurrency": "MYR",
+  "budgetCurrency": "MYR",                    // Display currency (MultiCurrency anchor)
+  "budgetExponent": 2,                        // Minor-unit digits for budgetCurrency
+  "totalBudgetMinor": NumberLong("600000"),   // 6000.00 MYR as integer minor units
+  "remainingBudgetMinor": NumberLong("591900"),// 5919.00 MYR; integer-only budget math, no decimals
   "travelStyle": "backpacker",                // Influences pricing weight and narrative mood
   "interests": ["photography", "temples", "local food"],
   "currentLocation": {
@@ -158,7 +176,7 @@ The state-machine controller storing active session metadata, cumulative budget 
     "coordinates": [85.3559, 27.6966]        // Tracks user's exact geospatial physical position
   },
   "visitedTags": ["airport", "transfer", "thamel"],
-  "status": "active",                         // "ready" | "active" | "completed"
+  "status": "active",                         // "ready" | "generating" | "active" | "completed"
   "createdAt": ISODate("2026-10-03T08:00:00Z"),
   "updatedAt": ISODate("2026-10-03T09:30:00Z")
 }
@@ -168,13 +186,15 @@ The state-machine controller storing active session metadata, cumulative budget 
 ```json
 {
   "bsonType": "object",
-  "required": ["userId", "destination", "totalDays", "currentDay", "totalBudget", "remainingBudget", "budgetCurrency", "status"],
+  "required": ["userId", "destination", "totalDays", "currentDay", "totalBudgetMinor", "remainingBudgetMinor", "budgetCurrency", "budgetExponent", "status"],
   "properties": {
     "totalDays": { "bsonType": "int", "minimum": 1, "maximum": 14 },
     "currentDay": { "bsonType": "int", "minimum": 0 },
-    "totalBudget": { "bsonType": "decimal" },
-    "remainingBudget": { "bsonType": "decimal" },
-    "status": { "enum": ["ready", "active", "completed"] },
+    "budgetCurrency": { "bsonType": "string", "description": "ISO 4217" },
+    "budgetExponent": { "bsonType": "int", "minimum": 0 },
+    "totalBudgetMinor": { "bsonType": "long", "minimum": 0, "description": "integer minor units — never decimal" },
+    "remainingBudgetMinor": { "bsonType": "long", "description": "integer minor units; may be 0 when budget is exhausted" },
+    "status": { "enum": ["ready", "generating", "active", "completed"] },
     "currentLocation": {
       "bsonType": "object",
       "required": ["type", "coordinates"],
@@ -205,7 +225,9 @@ Holds the core immersive daily journal content generated by Gemini. Multiple nod
 ```javascript
 {
   "_id": ObjectId("60c72b2f9b1d8b2bad000003"),
-  "journeyId": ObjectId("60c72b2f9b1d8b2bad000002"),
+  "journeyId": ObjectId("60c72b2f9b1d8b2bad000002"),  // -> journeys._id (parent)
+  "seededByChoiceId": null,                    // Day 1 = null. Day N+1 -> choices._id of the card the user selected.
+  "placeId": "ChIJ0RhONcsZ6zkRpBSF3Gv1vCY",   // -> locations.placeId; null if not a curated POI (e.g. ad-hoc transfer)
   "dayNumber": 1,
   "orderInDay": 0,
   "time": "14:30",
@@ -225,12 +247,10 @@ Holds the core immersive daily journal content generated by Gemini. Multiple nod
     "source": "OpenWeather"
   },
   "priceCategory": "transport",               // accommodation | food | transport | entry | other
-  "price": {
-    "amount": NumberDecimal("44.00"),
-    "currency": "MYR",
-    "localAmount": NumberDecimal("800.00"),
-    "localCurrency": "NPR",
-    "fxRate": NumberDecimal("0.055"),
+  "price": {                                  // Money (dual-currency, integer minor units)
+    "display": { "currency": "MYR", "exponent": 2, "minorUnits": NumberLong("4400"),  "major": NumberLong("44"),  "minor": "00" },
+    "local":   { "currency": "NPR", "exponent": 2, "minorUnits": NumberLong("80000"), "major": NumberLong("800"), "minor": "00" },
+    "fxRate": 0.055,
     "asOf": ISODate("2026-10-03T08:00:00Z")
   },
   "senses": {
@@ -270,7 +290,8 @@ Holds the core immersive daily journal content generated by Gemini. Multiple nod
     "bookingRequired": false
   },
   "media": {
-    "referencePhotos": ["asset_f98c1b"],      // Lazy-loading asset reference hash
+    // Hybrid: a ref is a source URL (default) OR an `asset_*` hash resolved from the optional AssetCache hot-cache.
+    "referencePhotos": ["https://images.unsplash.com/photo-1544735716-392fe2489ffa", "asset_f98c1b"],
     "ambientSound": "https://freesound.org/airport-ambient-kdu.mp3"
   },
   "searchTags": ["airport", "arrival", "transfer"],
@@ -286,6 +307,8 @@ Holds the core immersive daily journal content generated by Gemini. Multiple nod
   "required": ["journeyId", "dayNumber", "orderInDay", "title", "location", "priceCategory", "price", "senses", "createdAt"],
   "properties": {
     "journeyId": { "bsonType": "objectId" },
+    "seededByChoiceId": { "bsonType": ["objectId", "null"], "description": "choices._id that seeded this day; null on Day 1" },
+    "placeId": { "bsonType": ["string", "null"], "description": "-> locations.placeId; null if not a curated POI" },
     "dayNumber": { "bsonType": "int", "minimum": 1 },
     "orderInDay": { "bsonType": "int", "minimum": 0 },
     "location": {
@@ -303,6 +326,37 @@ Holds the core immersive daily journal content generated by Gemini. Multiple nod
       }
     },
     "priceCategory": { "enum": ["accommodation", "food", "transport", "entry", "other"] },
+    "price": {
+      "bsonType": "object",
+      "description": "Money — integer minor units only, never decimal",
+      "required": ["display", "local", "fxRate"],
+      "properties": {
+        "display": {
+          "bsonType": "object",
+          "required": ["currency", "exponent", "minorUnits"],
+          "properties": {
+            "currency":   { "bsonType": "string" },
+            "exponent":   { "bsonType": "int", "minimum": 0 },
+            "minorUnits": { "bsonType": "long" },
+            "major":      { "bsonType": "long" },
+            "minor":      { "bsonType": "string" }
+          }
+        },
+        "local": {
+          "bsonType": "object",
+          "required": ["currency", "exponent", "minorUnits"],
+          "properties": {
+            "currency":   { "bsonType": "string" },
+            "exponent":   { "bsonType": "int", "minimum": 0 },
+            "minorUnits": { "bsonType": "long" },
+            "major":      { "bsonType": "long" },
+            "minor":      { "bsonType": "string" }
+          }
+        },
+        "fxRate": { "bsonType": "double" },
+        "asOf":   { "bsonType": "date" }
+      }
+    },
     "embedding": {
       "bsonType": "array",
       "items": { "bsonType": "double" }
@@ -351,7 +405,7 @@ Records daily card selections offered to the user. Maintains a strict historical
       "type": "explore",                       // move | activity | explore | slow
       "title": "Boudhanath Stupa & Pashupatinath Temple",
       "description": "Two of Kathmandu's most powerful sacred sites in one day. A giant white stupa and an open-air cremation ground.",
-      "estimatedCost": NumberDecimal("120.00"), // Stored directly in user's display budgetCurrency
+      "estimatedCost": { "currency": "MYR", "exponent": 2, "minorUnits": NumberLong("12000"), "major": NumberLong("120"), "minor": "00" }, // MoneyAmount — forward estimate, display currency
       "travelTimeFromCurrent": "20min taxi",
       "destinationCoordinates": {
         "type": "Point",
@@ -365,7 +419,7 @@ Records daily card selections offered to the user. Maintains a strict historical
       "type": "slow",
       "title": "Wander the Backstreets of Patan",
       "description": "Slow down and explore ancient courtyards filled with brass workshops and hidden Buddhist shrines.",
-      "estimatedCost": NumberDecimal("35.00"),
+      "estimatedCost": { "currency": "MYR", "exponent": 2, "minorUnits": NumberLong("3500"), "major": NumberLong("35"), "minor": "00" },
       "travelTimeFromCurrent": "15min taxi",
       "destinationCoordinates": {
         "type": "Point",
@@ -375,9 +429,9 @@ Records daily card selections offered to the user. Maintains a strict historical
       "tags": ["artisan", "heritage", "slow-travel"],
       "isRecommended": false
     }
-    // ... 2 additional options to make exactly 4 choices
+    // ... 1–2 more options to make 3–4 total
   ],
-  "selectedIndex": 0,                         // Maps directly to Option A selected by user
+  "selectedIndex": 0,                         // null until the user picks; 0 = Option A. Max index = choices.length - 1
   "createdAt": ISODate("2026-10-03T20:00:00Z"),
   "updatedAt": ISODate("2026-10-03T20:15:00Z")
 }
@@ -394,14 +448,25 @@ Records daily card selections offered to the user. Maintains a strict historical
     "selectedIndex": { "bsonType": ["int", "null"], "minimum": 0, "maximum": 3 },
     "choices": {
       "bsonType": "array",
-      "minItems": 2,
+      "minItems": 3,
       "maxItems": 4,
       "items": {
         "bsonType": "object",
         "required": ["type", "title", "description", "estimatedCost", "destinationCoordinates", "destinationName", "tags"],
         "properties": {
           "type": { "enum": ["move", "activity", "explore", "slow"] },
-          "estimatedCost": { "bsonType": "decimal" },
+          "estimatedCost": {
+            "bsonType": "object",
+            "description": "MoneyAmount — integer minor units, never decimal",
+            "required": ["currency", "exponent", "minorUnits"],
+            "properties": {
+              "currency":   { "bsonType": "string" },
+              "exponent":   { "bsonType": "int", "minimum": 0 },
+              "minorUnits": { "bsonType": "long" },
+              "major":      { "bsonType": "long" },
+              "minor":      { "bsonType": "string" }
+            }
+          },
           "destinationCoordinates": {
             "bsonType": "object",
             "required": ["type", "coordinates"],
@@ -476,43 +541,69 @@ Internal MongoDB cache of regional Points of Interest (POIs) gathered from Googl
 
 ---
 
-### 6. `AssetCache` Collection
-Asynchronous binary store matching heavy Base64 image payloads and visual resources against simple references.
+### 6. `AssetCache` Collection *(optional — hybrid media strategy)*
+Media is **URL-first**: `nodes.media.referencePhotos` and `ambientSound` normally hold source URLs (Unsplash / Freesound) that the frontend lazy-loads directly. `AssetCache` is an **optional hot-cache** that pins the Base64 bytes for a small set of high-traffic POIs — so the demo stays fast and renders even if a source URL goes down. It is **not required** for the happy path; when a `referencePhotos` entry is an `asset_*` hash, it resolves here, otherwise the URL is fetched from source.
 
 #### 6.1 BSON Document Schema
 ```javascript
 {
   "_id": ObjectId("60c72b2f9b1d8b2bad000006"),
-  "assetHash": "asset_f98c1b",                // Corresponds to nodes.media.referencePhotos references
+  "assetHash": "asset_f98c1b",                // Matches an `asset_*` entry in nodes.media.referencePhotos
   "mimeType": "image/jpeg",
-  "base64Data": "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT...", // Complete lazy-loaded image binary string
-  "sourceUrl": "https://images.unsplash.com/photo-1544735716-392fe2489ffa?q=80",
+  "sourceUrl": "https://images.unsplash.com/photo-1544735716-392fe2489ffa?q=80", // origin; the cache key
+  "base64Data": "/9j/4AAQSkZJRgABAQ...",      // OPTIONAL pinned bytes; omit to fall back to sourceUrl
   "createdAt": ISODate("2026-05-17T20:00:00Z")
 }
 ```
 
 #### 6.2 Index Plan
 - `{"assetHash": 1}` (Unique Index)
+- `{"sourceUrl": 1}` (Unique Index — dedupe by origin so the same image is cached once)
 
 ---
 
 ## Part 3 — Core Database Relationships & Constraints
 
-### 1. Progressive Day Progression Isolation (Constraint)
-- A `DayNode` requires `journeyId` and `dayNumber`. The `currentDay` in `journeys` must strictly match the maximum `dayNumber` in `nodes` before transitioning to choice state (`DAY_N` has rendered).
+### 1. Relationship Matrix
 
-### 2. Multi-Currency Cohesion
-- The budget analytics logic must map prices categorized by `priceCategory`. The aggregation query converts nested BSON `price.amount` properties back to `journeys.budgetCurrency` to guarantee clean arithmetic balances.
+| Source | Target | Cardinality | Link field | Type | Notes |
+|---|---|:---:|---|---|---|
+| `users` | `journeys` | 1 : N | `journeys.userId → users.userId` | Reference (string) | One user runs many journeys |
+| `journeys` | `nodes` | 1 : N | `nodes.journeyId → journeys._id` | Reference | A day = several ordered nodes |
+| `journeys` | `choices` | 1 : N | `choices.journeyId → journeys._id` | Reference | One `choices` doc per upcoming day |
+| `choices` | `nodes` | 1 : N | `nodes.seededByChoiceId → choices._id` | Reference (nullable) | Selected card seeds next day; `null` on Day 1 |
+| `locations` | `nodes` | 1 : N | `nodes.placeId → locations.placeId` | Reference (nullable) | POI the node came from; `null` for ad-hoc stops |
+| `locations` | `choices` | advisory | *(none persisted)* | `$geoNear` read | Candidates filtered at generation, not stored |
+| `AssetCache` | `nodes` | 1 : N | `nodes.media.referencePhotos[]` (`asset_*`) `→ AssetCache.assetHash` | Reference (optional) | Only for cached hot images |
+| `users` | `journeys` (snapshot) | embed | `users.passport.stamps[].journeyId` | Embedded + ref | Completed-trip snapshot embedded on the user |
 
-### 3. Geographical Anti-Hallucination Guard
-- Every tomorrow choice's coordinates must locate inside the radial bound computed from the parent `DayNode`'s `endLocation` (i.e. the final node coordinates of the current `dayNumber`):
+### 2. Progressive Day Progression (Constraint)
+- Each `nodes` document requires `journeyId` + `dayNumber` + `orderInDay` (unique compound). Before the system transitions to the choice state for `DAY_N`, `journeys.currentDay` must equal the maximum `dayNumber` in `nodes` for that journey — i.e. the current day has fully rendered.
+- `nodes.seededByChoiceId` is `null` for Day 1 (no preceding choice). For Day N+1 it references the `choices._id` whose `selectedIndex` the user committed, making the "choice → resulting day" path traceable.
+- `journeys.currentLocation` mirrors the coordinates of the **last node** (highest `orderInDay`) of the current day — the spatial seed for the next day's `$geoNear`.
+
+### 3. State Lifecycle (Constraint)
+- `journeys.status` only moves forward: `ready` → `generating` (a day is being produced) → `active` (day rendered, awaiting the user's choice) → `completed` (`currentDay == totalDays`, export available).
+- `choices.selectedIndex` is `null` from generation until the user picks; once set it is immutable for that day, and `selectedIndex ∈ [0, choices.length - 1]`.
+
+### 4. Multi-Currency Cohesion (Constraint)
+- All money is **integer minor units** — no decimals anywhere. Budget analytics `$group` over `nodes.price.display.minorUnits` by `priceCategory`, entirely in `journeys.budgetCurrency`.
+- The budget guard is integer-only: `thresholdMinor = remainingBudgetMinor × 3 ÷ (remainingDays × 2)` (the `×1.5` written as `×3÷2`). A choice is in-budget when `estimatedCost.minorUnits ≤ thresholdMinor`.
+- `nodes.price.display.currency` always equals `journeys.budgetCurrency`; `price.local` preserves the destination-currency origin. When `remainingBudgetMinor` reaches 0, the generator is forced toward `slow`/free options (budget-recovery scenario).
+
+### 5. Geographical Anti-Hallucination Guard (Constraint)
+- Every next-day choice's coordinates must fall inside the radial bound from `journeys.currentLocation` (the last node of the current day). The generator filters `locations` with `$geoNear` **before** the agent reasons, so an unreachable POI can never be offered:
   ```javascript
-  db.locations.find({
-    geoPoint: {
-      $near: {
-        $geometry: { type: "Point", coordinates: [currentLong, currentLat] },
-        $maxDistance: 200000 // Radial constraint: 200 kilometers maximum limit
-      }
-    }
-  })
+  db.locations.aggregate([
+    { $geoNear: {
+        near: { type: "Point", coordinates: [currentLong, currentLat] },
+        distanceField: "dist.meters",
+        maxDistance: 200000,   // 200km one-day reachable radius; expand to 400000 if the result is empty
+        spherical: true
+    }},
+    { $match: { tags: { $nin: journey.visitedTags } } }   // dedup already-experienced types
+  ])
   ```
+
+### 6. Referential Integrity (Application-Enforced)
+- MongoDB does not enforce foreign keys, so the application / MCP layer guarantees: no orphan `nodes` or `choices` (every one carries a valid `journeyId`); `seededByChoiceId` and `placeId` either resolve to a live document or are explicitly `null`; and deleting a journey cascades to its `nodes` and `choices`.
