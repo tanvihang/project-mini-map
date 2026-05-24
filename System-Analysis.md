@@ -457,6 +457,8 @@ Travellers budget in their home currency, but real prices come back from pricing
 1. **No floating point for currency.** Floats cannot represent values like `0.10` exactly, so summing prices accumulates rounding error. The backend therefore **never stores or computes money as a decimal** — every amount is an **integer count of the currency's smallest unit** (its *minor unit*). MYR 44.00 is stored as `4400` (44 × 100); all arithmetic (budget guard, running totals, category rollups) is integer addition/comparison.
 2. **The frontend receives the value pre-split.** So the client never does float math either, the backend returns three values for any displayed amount: the integer total (`4400`), the major part (`44`), and the zero-padded minor part (`"00"`).
 
+> **Storage vs wire:** the integers below are the *logical* values. In BSON they are stored as `NumberLong`; on the **JSON wire** (MCP + REST) `minorUnits` and `major` are transmitted as **decimal strings** (`"4400"`, `"44"`) to avoid 2⁵³/float loss — `exponent` stays a number. See [`Backend-Coding-Standards.md` §1.2](Backend-Coding-Standards.md).
+
 ##### `MoneyAmount` — a single-currency amount
 
 ```json
@@ -563,9 +565,9 @@ Every monetary field is a **`MoneyAmount`** object so the client receives the th
       "properties": {
         "currency":   { "type": "string", "pattern": "^[A-Z]{3}$" },
         "exponent":   { "type": "integer", "minimum": 0 },
-        "minorUnits": { "type": "integer", "description": "authoritative integer total (e.g. 4400 == MYR 44.00)" },
-        "major":      { "type": "integer", "description": "e.g. 44" },
-        "minor":      { "type": "string",  "description": "zero-padded to exponent, e.g. \"00\"" }
+        "minorUnits": { "type": "string", "pattern": "^\\d+$", "description": "authoritative integer total as a decimal STRING (e.g. \"4400\" == MYR 44.00); string avoids float/2^53 loss" },
+        "major":      { "type": "string", "pattern": "^\\d+$", "description": "e.g. \"44\"" },
+        "minor":      { "type": "string", "description": "zero-padded to exponent, e.g. \"00\"" }
       },
       "required": ["currency", "exponent", "minorUnits", "major", "minor"]
     }

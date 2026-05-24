@@ -10,7 +10,9 @@ These nested structures are reused across multiple collections to maintain stric
 
 ### 1. Multi-Currency Money Structs (`MoneyAmount` / `Money`)
 
-Monetary values are **never** stored as floats or decimals. The backend stores an **integer count of the currency's smallest unit** (its *minor unit*) — MYR 44.00 is `4400` (44 × 100) — and all arithmetic (budget guard, running totals, category rollups) is integer addition/comparison. The frontend receives the value **pre-split** into three numbers so it never does float math either: the integer total (`4400`), the major part (`44`), and the zero-padded minor part (`"00"`).
+Monetary values are **never** stored as floats or decimals. The backend stores an **integer count of the currency's smallest unit** (its *minor unit*) — MYR 44.00 is `4400` (44 × 100) — and all arithmetic (budget guard, running totals, category rollups) is integer addition/comparison. The frontend receives the value **pre-split** into three parts so it never does float math either: the integer total (`4400`), the major part (`44`), and the zero-padded minor part (`"00"`).
+
+> **Storage vs wire:** in BSON, `minorUnits` / `major` are stored as `NumberLong` (see examples below). On the **JSON wire** (MCP responses and the frontend REST API) they are transmitted as **decimal strings** (`"4400"`, `"44"`) to avoid IEEE-754 / 2⁵³ precision loss — `exponent` stays a number. See [`Backend-Coding-Standards.md` §1.2](Backend-Coding-Standards.md).
 
 #### `MoneyAmount` — a single-currency amount
 Used for any **displayed** amount: budgets, rollups, and forward estimates.
@@ -64,11 +66,11 @@ erDiagram
   journeys   ||--o{ choices   : "presents daily"
   choices    ||--o{ nodes     : "selection seeds next day (seededByChoiceId)"
   locations  ||--o{ nodes     : "sources POI (placeId)"
-  locations  ||--o{ choices   : "geoNear candidates"
+  locations  ||--o{ choices   : "geoNear + vectorSearch candidates"
   AssetCache ||--o{ nodes     : "optional media hot-cache"
 ```
 
-- Solid lines = a stored reference (foreign-key field). `locations → choices` is **advisory** (the choice generator reads `locations` via `$geoNear` but does not persist a per-choice FK back to it).
+- Solid lines = a stored reference (foreign-key field). `locations → choices` is **advisory** (the choice generator reads `locations` via `$geoNear` then `$vectorSearch` but does not persist a per-choice FK back to it).
 - `users.userId` is a frontend-supplied string (MVP, no auth); every other cross-collection link is an `ObjectId`, except `placeId` which is the Google `place_id` string.
 
 ---
@@ -491,7 +493,7 @@ Records daily card selections offered to the user. Maintains a strict historical
 Internal MongoDB cache of regional Points of Interest (POIs) gathered from Google Places API. This cache is crucial to enforce absolute geographic boundaries.
 
 #### 5.1 Relationship
-- **System Anchor**: Serves as the base dataset for **`$geoNear` aggregation queries**. The choice generator queries this collection, filters by distance from the user's previous day location, and serves the results as recommendations.
+- **System Anchor**: The base dataset for **`$geoNear`** (geographic reach) and **`$vectorSearch`** (semantic vibe match). Choice generation is a two-step retrieval: `$geoNear` yields the reachable candidate `placeId`s, then `$vectorSearch` over `embedding` ranks those candidates by similarity to the user's interest query vector (with tag-based dedup as a `filter`). See [`MCP-Tools.md`](MCP-Tools.md) `get_reachable_locations`.
 
 #### 5.2 BSON Document Schema
 ```javascript
@@ -507,6 +509,7 @@ Internal MongoDB cache of regional Points of Interest (POIs) gathered from Googl
   "costTier": 2,                              // 1 (free/cheap) to 5 (extremely premium)
   "tags": ["hinduism", "temple", "cremation", "heritage", "spiritual"],
   "rating": 4.6,
+  "embedding": [0.0231, -0.0117, 0.0884, 0.045], // Voyage AI 1024-dim vector of name + tags + summary (truncated)
   "createdAt": ISODate("2026-05-17T20:00:00Z"),
   "updatedAt": ISODate("2026-05-17T20:00:00Z")
 }
@@ -529,15 +532,26 @@ Internal MongoDB cache of regional Points of Interest (POIs) gathered from Googl
       }
     },
     "costTier": { "bsonType": "int", "minimum": 1, "maximum": 5 },
-    "tags": { "bsonType": "array", "items": { "bsonType": "string" } }
+    "tags": { "bsonType": "array", "items": { "bsonType": "string" } },
+    "embedding": { "bsonType": "array", "items": { "bsonType": "double" } }
   }
 }
 ```
 
 #### 5.4 Index Plan
 - `{"placeId": 1}` (Unique Index)
-- `{"geoPoint": "2dsphere"}` (Highly critical: enables geoNear radial queries)
-- `{"tags": 1}` (Multi-key index to filter categories before running vector calculations)
+- `{"geoPoint": "2dsphere"}` (critical: enables `$geoNear` radial queries — step 1 of choice retrieval)
+- `{"tags": 1}` (multi-key index for category filtering)
+- **Atlas Vector Search Index** on `embedding` — step 2 of choice retrieval (vibe ranking). `placeId` and `tags` are declared as `filter` fields so the vector query can be constrained to the geo-reachable candidate set and exclude visited tags:
+  ```json
+  {
+    "fields": [
+      { "type": "vector", "path": "embedding", "numDimensions": 1024, "similarity": "cosine" },
+      { "type": "filter", "path": "placeId" },
+      { "type": "filter", "path": "tags" }
+    ]
+  }
+  ```
 
 ---
 
@@ -573,7 +587,7 @@ Media is **URL-first**: `nodes.media.referencePhotos` and `ambientSound` normall
 | `journeys` | `choices` | 1 : N | `choices.journeyId → journeys._id` | Reference | One `choices` doc per upcoming day |
 | `choices` | `nodes` | 1 : N | `nodes.seededByChoiceId → choices._id` | Reference (nullable) | Selected card seeds next day; `null` on Day 1 |
 | `locations` | `nodes` | 1 : N | `nodes.placeId → locations.placeId` | Reference (nullable) | POI the node came from; `null` for ad-hoc stops |
-| `locations` | `choices` | advisory | *(none persisted)* | `$geoNear` read | Candidates filtered at generation, not stored |
+| `locations` | `choices` | advisory | *(none persisted)* | `$geoNear` + `$vectorSearch` read | Reachable candidates, vibe-ranked & deduped at generation, not stored |
 | `AssetCache` | `nodes` | 1 : N | `nodes.media.referencePhotos[]` (`asset_*`) `→ AssetCache.assetHash` | Reference (optional) | Only for cached hot images |
 | `users` | `journeys` (snapshot) | embed | `users.passport.stamps[].journeyId` | Embedded + ref | Completed-trip snapshot embedded on the user |
 

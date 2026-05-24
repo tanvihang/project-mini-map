@@ -94,15 +94,15 @@ POST /api/journeys
 
 **Response to frontend:**
 
-> All money is a **`MoneyAmount`** — integer `minorUnits` plus the pre-split `major` / `minor` the UI renders (see [MultiCurrency](../System-Analysis.md#multicurrency-money-model)). MYR 81.00 → `minorUnits: 8100`.
+> All money is a **`MoneyAmount`** — `minorUnits` plus the pre-split `major` / `minor` the UI renders (see [MultiCurrency](../System-Analysis.md#multicurrency-money-model)). On the wire `minorUnits`/`major` are **decimal strings** (precision-safe): MYR 81.00 → `minorUnits: "8100"`.
 
 ```json
 {
   "dayNumber": 1,
   "currency": "MYR",          // display currency for all amounts below
   "nodes": [ /* array of node documents */ ], 
-  "dayTotal":        { "currency": "MYR", "exponent": 2, "minorUnits": 8100,   "major": 81,   "minor": "00" },
-  "remainingBudget": { "currency": "MYR", "exponent": 2, "minorUnits": 591900, "major": 5919, "minor": "00" },
+  "dayTotal":        { "currency": "MYR", "exponent": 2, "minorUnits": "8100",   "major": "81",   "minor": "00" },
+  "remainingBudget": { "currency": "MYR", "exponent": 2, "minorUnits": "591900", "major": "5919", "minor": "00" },
   "remainingDays": 6
 }
 ```
@@ -211,7 +211,7 @@ Output JSON array of exactly 4 choices:
       "type": "explore",
       "title": "Boudhanath Stupa + Pashupatinath Temple",
       "description": "Two of Kathmandu's most powerful sacred sites in one day. A giant white stupa and an open-air cremation ground on the same riverbank — nothing prepares you for either.",
-      "estimatedCost": { "currency": "MYR", "exponent": 2, "minorUnits": 12000, "major": 120, "minor": "00" },
+      "estimatedCost": { "currency": "MYR", "exponent": 2, "minorUnits": "12000", "major": "120", "minor": "00" },
       "travelTimeFromCurrent": "20min taxi",
       "destinationCoordinates": { "type": "Point", "coordinates": [85.3621, 27.7215] },
       "destinationName": "Boudhanath, Kathmandu",
@@ -220,7 +220,7 @@ Output JSON array of exactly 4 choices:
     }
     // ... 3 more choices
   ],
-  "remainingBudget": { "currency": "MYR", "exponent": 2, "minorUnits": 591900, "major": 5919, "minor": "00" },
+  "remainingBudget": { "currency": "MYR", "exponent": 2, "minorUnits": "591900", "major": "5919", "minor": "00" },
   "remainingDays": 6
 }
 ```
@@ -287,21 +287,21 @@ POST /api/journeys/:journeyId/export
   "destination": "Kathmandu, Nepal",
   "dates": "Oct 3–10, 2026",
   "currency": "MYR",
-  "totalSpent":  { "currency": "MYR", "exponent": 2, "minorUnits": 384000, "major": 3840, "minor": "00" },
-  "totalBudget": { "currency": "MYR", "exponent": 2, "minorUnits": 600000, "major": 6000, "minor": "00" },
+  "totalSpent":  { "currency": "MYR", "exponent": 2, "minorUnits": "384000", "major": "3840", "minor": "00" },
+  "totalBudget": { "currency": "MYR", "exponent": 2, "minorUnits": "600000", "major": "6000", "minor": "00" },
   "budgetByCategory": {
-    "accommodation": { "currency": "MYR", "exponent": 2, "minorUnits": 52000, "major": 520, "minor": "00" },
-    "food":          { "currency": "MYR", "exponent": 2, "minorUnits": 42000, "major": 420, "minor": "00" },
-    "transport":     { "currency": "MYR", "exponent": 2, "minorUnits": 25000, "major": 250, "minor": "00" },
-    "entry":         { "currency": "MYR", "exponent": 2, "minorUnits": 31000, "major": 310, "minor": "00" },
-    "other":         { "currency": "MYR", "exponent": 2, "minorUnits": 14000, "major": 140, "minor": "00" }
+    "accommodation": { "currency": "MYR", "exponent": 2, "minorUnits": "52000", "major": "520", "minor": "00" },
+    "food":          { "currency": "MYR", "exponent": 2, "minorUnits": "42000", "major": "420", "minor": "00" },
+    "transport":     { "currency": "MYR", "exponent": 2, "minorUnits": "25000", "major": "250", "minor": "00" },
+    "entry":         { "currency": "MYR", "exponent": 2, "minorUnits": "31000", "major": "310", "minor": "00" },
+    "other":         { "currency": "MYR", "exponent": 2, "minorUnits": "14000", "major": "140", "minor": "00" }
   },
   "days": [
     {
       "dayNumber": 1,
       "date": "2026-10-03",
       "title": "Arrival — Thamel District",
-      "dayTotal": { "currency": "MYR", "exponent": 2, "minorUnits": 8100, "major": 81, "minor": "00" },
+      "dayTotal": { "currency": "MYR", "exponent": 2, "minorUnits": "8100", "major": "81", "minor": "00" },
       "nodes": [
         {
           "time": "14:30",
@@ -333,7 +333,7 @@ POST /api/journeys/:journeyId/export
         "coordinates": { "type": "Point", "coordinates": [85.3240, 27.7172] },
         "completedAt": "ISODate",
         "totalDays": 7,
-        "totalSpent": { "currency": "MYR", "exponent": 2, "minorUnits": 384000, "major": 3840, "minor": "00" }
+        "totalSpent": { "currency": "MYR", "exponent": 2, "minorUnits": "384000", "major": "3840", "minor": "00" }
       }
     ]
   }
@@ -344,7 +344,7 @@ POST /api/journeys/:journeyId/export
 
 ## API Summary
 
-Every monetary field in a response is a **`MoneyAmount`** object — integer `minorUnits` plus the pre-split `major`/`minor` for display (MYR 44.00 → `{ minorUnits: 4400, major: 44, minor: "00" }`). The backend never uses floats for currency; all sums and the budget guard run in integer minor units. Captured node prices use the dual-currency **`Money`** type (`display` + `local` + `fxRate`) to preserve the original local price. See [MultiCurrency](../System-Analysis.md#multicurrency-money-model).
+Every monetary field in a response is a **`MoneyAmount`** object — `minorUnits` plus the pre-split `major`/`minor` for display, where `minorUnits`/`major` are sent as **decimal strings** to avoid float/2⁵³ loss (MYR 44.00 → `{ minorUnits: "4400", major: "44", minor: "00" }`). The backend never uses floats for currency; all sums and the budget guard run in integer minor units. Captured node prices use the dual-currency **`Money`** type (`display` + `local` + `fxRate`) to preserve the original local price. See [MultiCurrency](../System-Analysis.md#multicurrency-money-model).
 
 | Method | Endpoint                        | Step | Description                           |
 | ------ | ------------------------------- | ---- | ------------------------------------- |
@@ -387,11 +387,12 @@ Every monetary field in a response is a **`MoneyAmount`** object — integer `mi
 ```
 ☐ Create Atlas cluster (M0 free tier is fine for MVP)
 ☐ Enable Atlas Vector Search
-   └── Index: nodes.embedding (1024-dim, Voyage AI)
+   ├── Index: nodes.embedding (1024-dim, Voyage AI) — journal semantic search
+   └── Index: locations.embedding (1024-dim, Voyage AI; filter fields: placeId, tags) — choice vibe ranking
 ☐ Enable Atlas Search
    └── Index: nodes (fields: senses.story, searchTags, location.name)
 ☐ Create 2dsphere index on locations.geoPoint
-   └── Enables $geoNear queries for choice generation
+   └── Enables $geoNear queries (step 1 of choice generation)
 ☐ Create 2dsphere index on nodes.location.coordinates
    └── Powers the passport footprint map
 ☐ Apply $jsonSchema validators on journeys + nodes (incl. Money shape)
