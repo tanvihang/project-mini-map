@@ -373,16 +373,19 @@ Project Mini Map relies on a highly integrated, deterministic system dependency 
 
 ```mermaid
 graph TD
-  User[User / Browser] <--> NextJS[Next.js App Router Web Frontend]
-  NextJS <--> AgentBuilder[Google Cloud Agent Builder / Gemini Pro]
-  AgentBuilder <--> MCPServer[MongoDB MCP Server Backbone]
-  MCPServer <--> MongoDB[MongoDB Atlas]
-  MCPServer <--> VoyageAI[Voyage AI Embeddings API]
+  User[User / Browser] <--> NextJS[Next.js Web Frontend]
+  NextJS <--> Backend[Python Backend / FastAPI]
+  Backend <--> AgentBuilder[Google Cloud Agent Builder / Gemini Pro]
+  Backend <--> MongoDB[MongoDB Atlas]
+  AgentBuilder <--> MCPServer[MongoDB MCP Server / Python]
+  MCPServer <--> MongoDB
+  Backend <--> VoyageAI[Voyage AI Embeddings API]
 ```
 
-- **Frontend Connectivity**: Next.js connects via standard TLS to Google Cloud Agent Builder. It is entirely agnostic of MongoDB credentials, communicating through strict structured JSON payloads.
-- **Reasoning Loop**: The Gemini Pro engine within Agent Builder relies on the MCP (Model Context Protocol) Server for all tool invocations. The Agent has zero direct network access to Voyage AI or external weather services; all external states are proxied through MCP tool schemas.
-- **Data & Vector Layer**: MongoDB Atlas serves as both the application state store and vector database. Voyage AI provides 1024-dimensional embeddings for semantic visual preference mapping.
+- **Frontend Connectivity**: Next.js connects via standard TLS to the **Python (FastAPI) backend** only, communicating through strict structured JSON payloads. It is entirely agnostic of MongoDB credentials and never calls Agent Builder directly.
+- **Backend Orchestration**: The FastAPI backend owns the REST API and the journey state machine, invokes Agent Builder, and computes Voyage AI query embeddings. It enforces the integer-money and budget rules before persisting.
+- **Reasoning Loop**: The Gemini Pro engine within Agent Builder relies on the MCP (Model Context Protocol) Server for all tool invocations. The Agent has zero direct write access; all data access is proxied through MCP tool schemas that enforce the geographic and budget guards.
+- **Data & Vector Layer**: MongoDB Atlas serves as both the application state store and vector database. Voyage AI provides 1024-dimensional embeddings for semantic vibe matching (`locations`) and journal search (`nodes`).
 
 ## System Design
 ### System Architecture
@@ -392,21 +395,24 @@ Mini Map is structured using a strict decoupled model where state management, ve
 ```mermaid
 sequenceDiagram
   autonumber
-  actor User as User Frontend (Next.js)
+  actor User as Frontend (Next.js)
+  participant BE as Python Backend (FastAPI)
   participant AB as Agent Builder (Gemini Pro)
   participant MCP as MongoDB MCP Server
   participant DB as MongoDB Atlas
 
-  User->>AB: Initialize Trip (Dest, Budget, Style)
-  AB->>MCP: Call get_reachable_locations(coord, budget)
-  MCP->>DB: Perform geoNear + Vector Search Aggregation
+  User->>BE: POST /api/journeys (Dest, Budget, Style)
+  BE->>AB: Orchestrate trip initialization
+  AB->>MCP: Call get_reachable_locations(coord, interests)
+  MCP->>DB: geoNear -> candidate IDs, then $vectorSearch (vibe rank)
   DB-->>MCP: Return deterministic locations & vibes
   MCP-->>AB: Structured BSON/JSON context
   AB->>AB: Reason, generate Day Narrative & next Choices
   AB->>MCP: Save nodes + journey state (remainingBudget, currentLocation)
   MCP->>DB: Write nodes / update journeys
-  AB-->>User: Stream complete JSON (Narrative, media refs, choices)
-  User->>DB: Asynchronously resolve media by hash/URL (Lazy-load)
+  AB-->>BE: Day JSON (Narrative, media refs, choices)
+  BE-->>User: Stream validated JSON (money as strings)
+  User->>BE: Asynchronously resolve media by hash/URL (Lazy-load)
 ```
 
 This sequence ensures:
@@ -525,7 +531,7 @@ The user interface is designed as an immersive Next.js Single Page Application u
 
 ### System API
 
-To ensure rigid operational constraints, all communication between the Next.js Frontend and the Agent Builder reasoning layer utilizes strict JSON schemas.
+To ensure rigid operational constraints, all communication between the Next.js frontend and the Python (FastAPI) backend utilizes strict JSON schemas.
 
 #### 1. Trip Initialization Request (`POST /api/trip/init`)
 ```json

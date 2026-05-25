@@ -174,13 +174,18 @@ Each stop in a journey is a single MongoDB document in the `nodes` collection. M
 
 ## Architecture
 
-The frontend never touches Atlas directly. It speaks structured JSON to the Next.js API layer, which orchestrates the Gemini agent; the agent reaches data **only** through the MongoDB MCP Server, which enforces the geographic and budget guards before any document is read or written.
+The frontend never touches Atlas directly. It speaks structured JSON to the Python (FastAPI) backend, which orchestrates the Gemini agent; the agent reaches data **only** through the MongoDB MCP Server, which enforces the geographic and budget guards before any document is read or written.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     User (Web App)                      │
+│                 User (Next.js Web App)                  │
 └───────────────────────┬─────────────────────────────────┘
-                        │  structured JSON
+                        │  structured JSON (REST)
+┌───────────────────────▼─────────────────────────────────┐
+│              Python Backend (FastAPI)                   │
+│   REST API · journey state machine · agent orchestration│
+└───────────────────────┬─────────────────────────────────┘
+                        │  orchestrates
 ┌───────────────────────▼─────────────────────────────────┐
 │          Google Cloud Agent Builder                     │
 │          Gemini Pro (latest via Agent Builder)          │
@@ -250,7 +255,8 @@ The frontend never touches Atlas directly. It speaks structured JSON to the Next
 
 ### Prerequisites
 
-- Node.js 18+
+- **Python 3.12+** and [uv](https://docs.astral.sh/uv/) (backend)
+- **Node.js 18+** (Next.js frontend)
 - MongoDB Atlas account (free tier works)
 - Google Cloud project with Vertex AI enabled
 - API keys: OpenWeatherMap, Hostelworld, Google Places, Fixer.io (FX)
@@ -260,7 +266,12 @@ The frontend never touches Atlas directly. It speaks structured JSON to the Next
 ```bash
 git clone https://github.com/tanvihang/project-mini-map.git
 cd project-mini-map
-yarn install
+
+# Backend (Python)
+uv sync
+
+# Frontend (Next.js) — separate app
+cd frontend && yarn install
 ```
 
 ### Environment Variables
@@ -286,11 +297,14 @@ FX_API_KEY=your-key                     # Fixer.io — drives MultiCurrency conv
 ### Run
 
 ```bash
-# Start the MongoDB MCP server (registered as a tool in Agent Builder)
-yarn mcp:start
+# Backend — MongoDB MCP server (registered as a tool in Agent Builder)
+uv run python -m app.mcp
 
-# Start the web app
-yarn dev
+# Backend — FastAPI API
+uv run uvicorn app.main:app --reload
+
+# Frontend — Next.js web app
+cd frontend && yarn dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).

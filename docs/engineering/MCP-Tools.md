@@ -1,31 +1,46 @@
 # Project Mini Map — MCP Tools Specification v1.0
 
-This document defines the tool contracts that the MongoDB MCP (Model Context Protocol) server exposes to Google Cloud Agent Builder (the latest **Gemini Pro** available there). Parameter design, input/output shapes, and the underlying MongoDB pipelines follow the project's real MVP logic and the schemas in [`Data-Models.md`](Data-Models.md). All handlers obey [`Backend-Coding-Standards.md`](Backend-Coding-Standards.md) — integer minor units, `[lon, lat]` order, and the structured error contract.
+This document defines the tool contracts that the MongoDB MCP (Model Context Protocol) server exposes to Google Cloud Agent Builder (the latest **Gemini Pro** available there). The MCP server is a **Python** service (official `mcp` SDK + **Motor** async driver); parameter design, input/output shapes, and the underlying MongoDB pipelines follow the project's real MVP logic and the schemas in [`Data-Models.md`](Data-Models.md). All handlers obey [`Backend-Coding-Standards.md`](Backend-Coding-Standards.md) — integer minor units, `[lon, lat]` order, and the structured error contract.
 
 ---
 
 ## Tool Architecture Overview
 
-Under MCP, each tool is declared to Gemini in JSON-RPC form with:
+Under MCP, each tool is declared to Gemini with:
 - `name` — unique tool name (`snake_case`).
 - `description` — a precise description that tells Gemini when and how to use the tool.
 - `inputSchema` — a JSON Schema for the input arguments.
 
-Five tools are exposed: `get_journey_state`, `get_visited_tags`, `get_reachable_locations`, `create_node`, and `update_journey`.
+Five tools are exposed: `get_journey_state`, `get_visited_tags`, `get_reachable_locations`, `create_node`, and `update_journey`. The JSON definitions below are language-agnostic; the handlers are async Python registered with the `mcp` SDK.
 
 ### Response & Error Conventions
-- Success: `{ "isSuccess": true, ... }`.
-- Failure: handlers **MUST NOT** throw raw errors to the transport. They return the structured error contract (see [`Backend-Coding-Standards.md` §4](Backend-Coding-Standards.md)):
+- Success: `{"isSuccess": true, ...}`.
+- Failure: handlers **MUST NOT** raise to the transport. They return the structured error contract (see [`Backend-Coding-Standards.md` §4](Backend-Coding-Standards.md)):
   ```json
   { "isSuccess": false, "errorCode": "ERR_NOT_FOUND", "errorMessage": "...", "fallbackAction": "ABORT" }
   ```
 - Money is transmitted as **decimal strings** (`minorUnits`), never floats; the agent reasons over the integer string and the backend converts.
 
-```typescript
-import { ObjectId, Long } from 'mongodb';
-import { errorContract } from '../lib/errors';   // builds the structured contract
-import { exponentOf } from '../lib/money';        // ISO 4217 minor-unit digits
-import { embedWithVoyage } from '../lib/voyage';  // 1024-dim query embedding
+```python
+from bson import ObjectId, Int64
+from pymongo import ReturnDocument
+
+from app.lib.db import db                 # Motor AsyncIOMotorDatabase
+from app.lib.errors import error_contract  # builds the structured contract
+from app.lib.money import exponent_of      # ISO 4217 minor-unit digits
+from app.lib.voyage import embed_with_voyage  # async 1024-dim query embedding
+
+def to_stored_money(minor_units: int, currency: str) -> dict:
+    """Build the stored MoneyAmount sub-document; minorUnits/major as BSON Int64 (== NumberLong)."""
+    exponent = exponent_of(currency)        # never hardcode — ISO 4217 lookup
+    factor = 10 ** exponent
+    return {
+        "currency": currency,
+        "exponent": exponent,
+        "minorUnits": Int64(minor_units),
+        "major": Int64(minor_units // factor),
+        "minor": "" if exponent == 0 else str(minor_units % factor).zfill(exponent),
+    }
 ```
 
 ---
@@ -50,33 +65,30 @@ When a session starts or the user advances to a new day, Gemini calls this first
 }
 ```
 
-### 1.3 Backend Logic (Node.js)
-```typescript
-async function handleGetJourneyState(journeyIdStr: string) {
-  if (!ObjectId.isValid(journeyIdStr)) {
-    return errorContract('ERR_VALIDATION', 'journeyId is not a valid ObjectId.', 'RETRY_WITH_FIXED_SCHEMA');
-  }
-  const journey = await db.collection('journeys').findOne(
-    { _id: new ObjectId(journeyIdStr) },
-    { projection: { /* keep the lean state only */ } }
-  );
-  if (!journey) {
-    return errorContract('ERR_NOT_FOUND', `Journey ${journeyIdStr} not found.`, 'ABORT');
-  }
-  return {
-    isSuccess: true,
-    journeyId: journey._id.toString(),
-    destination: journey.destination,
-    currentDay: journey.currentDay,
-    totalDays: journey.totalDays,
-    remainingDays: journey.totalDays - journey.currentDay,
-    budgetCurrency: journey.budgetCurrency,
-    budgetExponent: journey.budgetExponent,
-    remainingBudgetMinor: journey.remainingBudgetMinor.toString(), // string — no precision loss
-    currentLocation: journey.currentLocation,
-    status: journey.status
-  };
-}
+### 1.3 Backend Logic (Python / Motor)
+```python
+async def handle_get_journey_state(journey_id: str) -> dict:
+    if not ObjectId.is_valid(journey_id):
+        return error_contract("ERR_VALIDATION", "journeyId is not a valid ObjectId.", "RETRY_WITH_FIXED_SCHEMA")
+    journey = await db.journeys.find_one(
+        {"_id": ObjectId(journey_id)},
+        projection={"embedding": 0},  # keep the lean state only
+    )
+    if journey is None:
+        return error_contract("ERR_NOT_FOUND", f"Journey {journey_id} not found.", "ABORT")
+    return {
+        "isSuccess": True,
+        "journeyId": str(journey["_id"]),
+        "destination": journey["destination"],
+        "currentDay": journey["currentDay"],
+        "totalDays": journey["totalDays"],
+        "remainingDays": journey["totalDays"] - journey["currentDay"],
+        "budgetCurrency": journey["budgetCurrency"],
+        "budgetExponent": journey["budgetExponent"],
+        "remainingBudgetMinor": str(journey["remainingBudgetMinor"]),  # string — no precision loss for JS clients
+        "currentLocation": journey["currentLocation"],
+        "status": journey["status"],
+    }
 ```
 
 ---
@@ -101,21 +113,18 @@ Before generating the next set of options, Gemini calls this to read the experie
 }
 ```
 
-### 2.3 Backend Logic (Node.js)
-```typescript
-async function handleGetVisitedTags(journeyIdStr: string) {
-  if (!ObjectId.isValid(journeyIdStr)) {
-    return errorContract('ERR_VALIDATION', 'journeyId is not a valid ObjectId.', 'RETRY_WITH_FIXED_SCHEMA');
-  }
-  const journey = await db.collection('journeys').findOne(
-    { _id: new ObjectId(journeyIdStr) },
-    { projection: { visitedTags: 1 } }
-  );
-  if (!journey) {
-    return errorContract('ERR_NOT_FOUND', `Journey ${journeyIdStr} not found.`, 'ABORT');
-  }
-  return { isSuccess: true, journeyId: journeyIdStr, visitedTags: journey.visitedTags ?? [] };
-}
+### 2.3 Backend Logic (Python / Motor)
+```python
+async def handle_get_visited_tags(journey_id: str) -> dict:
+    if not ObjectId.is_valid(journey_id):
+        return error_contract("ERR_VALIDATION", "journeyId is not a valid ObjectId.", "RETRY_WITH_FIXED_SCHEMA")
+    journey = await db.journeys.find_one(
+        {"_id": ObjectId(journey_id)},
+        projection={"visitedTags": 1},
+    )
+    if journey is None:
+        return error_contract("ERR_NOT_FOUND", f"Journey {journey_id} not found.", "ABORT")
+    return {"isSuccess": True, "journeyId": journey_id, "visitedTags": journey.get("visitedTags", [])}
 ```
 
 ---
@@ -148,76 +157,77 @@ This is a **two-step retrieval**, because in Atlas both `$geoNear` and `$vectorS
 }
 ```
 
-### 3.3 Backend Logic (Node.js & MongoDB)
-```typescript
-async function handleGetReachableLocations(input: {
-  longitude: number; latitude: number; maxDistanceMeters?: number;
-  excludeTags?: string[]; interestQuery?: string;
-}) {
-  const { longitude, latitude, maxDistanceMeters = 200000, excludeTags = [], interestQuery } = input;
+### 3.3 Backend Logic (Python / Motor)
+```python
+async def handle_get_reachable_locations(
+    longitude: float,
+    latitude: float,
+    max_distance_meters: int = 200_000,
+    exclude_tags: list[str] | None = None,
+    interest_query: str | None = None,
+) -> dict:
+    exclude_tags = exclude_tags or []
 
-  // STEP 1 — geographic reach. $geoNear MUST be stage 1 (its own pipeline).
-  const geoCandidates = await db.collection('locations').aggregate([
-    {
-      $geoNear: {
-        near: { type: 'Point', coordinates: [longitude, latitude] }, // [lon, lat]
-        distanceField: 'dist.meters',
-        maxDistance: maxDistanceMeters,
-        spherical: true
-      }
-    },
-    { $match: { tags: { $nin: excludeTags } } },          // tag-based dedup
-    { $project: { placeId: 1, 'dist.meters': 1 } }
-  ]).toArray();
+    # STEP 1 — geographic reach. $geoNear MUST be stage 1 (its own pipeline).
+    geo_pipeline = [
+        {"$geoNear": {
+            "near": {"type": "Point", "coordinates": [longitude, latitude]},  # [lon, lat]
+            "distanceField": "dist.meters",
+            "maxDistance": max_distance_meters,
+            "spherical": True,
+        }},
+        {"$match": {"tags": {"$nin": exclude_tags}}},   # tag-based dedup
+        {"$project": {"placeId": 1, "dist.meters": 1}},
+    ]
+    geo_candidates = await db.locations.aggregate(geo_pipeline).to_list(length=None)
 
-  if (geoCandidates.length === 0) {
-    // The caller (agent/middleware) should retry once at 400000 before giving up.
-    return errorContract('ERR_GEOSPATIAL_EMPTY', 'No reachable POIs within the radius.', 'EXPAND_RADIUS');
-  }
+    if not geo_candidates:
+        # The caller (agent/middleware) should retry once at 400000 before giving up.
+        return error_contract("ERR_GEOSPATIAL_EMPTY", "No reachable POIs within the radius.", "EXPAND_RADIUS")
 
-  const reachableIds = geoCandidates.map(c => c.placeId);
-  const distById = new Map(geoCandidates.map(c => [c.placeId, c.dist.meters]));
+    reachable_ids = [c["placeId"] for c in geo_candidates]
+    dist_by_id = {c["placeId"]: c["dist"]["meters"] for c in geo_candidates}
 
-  // STEP 2 — semantic vibe ranking. $vectorSearch MUST be stage 1 (separate pipeline),
-  // constrained to the geo-reachable set via the vector index `filter`.
-  let candidates;
-  if (interestQuery) {
-    const queryVector = await embedWithVoyage(interestQuery); // 1024-dim
-    candidates = await db.collection('locations').aggregate([
-      {
-        $vectorSearch: {
-          index: 'locations_vector_index',
-          path: 'embedding',
-          queryVector,
-          filter: { placeId: { $in: reachableIds }, tags: { $nin: excludeTags } },
-          numCandidates: 100,
-          limit: 10
-        }
-      },
-      { $project: { placeId: 1, name: 1, formattedAddress: 1, geoPoint: 1, costTier: 1, tags: 1, score: { $meta: 'vectorSearchScore' } } }
-    ]).toArray();
-  } else {
-    // No vibe query: fall back to nearest reachable.
-    candidates = await db.collection('locations')
-      .find({ placeId: { $in: reachableIds } })
-      .project({ embedding: 0 })
-      .limit(10)
-      .toArray();
-  }
+    # STEP 2 — semantic vibe ranking. $vectorSearch MUST be stage 1 (separate pipeline),
+    # constrained to the geo-reachable set via the vector index `filter`.
+    if interest_query:
+        query_vector = await embed_with_voyage(interest_query)  # 1024-dim
+        vector_pipeline = [
+            {"$vectorSearch": {
+                "index": "locations_vector_index",
+                "path": "embedding",
+                "queryVector": query_vector,
+                "filter": {"placeId": {"$in": reachable_ids}, "tags": {"$nin": exclude_tags}},
+                "numCandidates": 100,
+                "limit": 10,
+            }},
+            {"$project": {
+                "placeId": 1, "name": 1, "formattedAddress": 1, "geoPoint": 1,
+                "costTier": 1, "tags": 1, "score": {"$meta": "vectorSearchScore"},
+            }},
+        ]
+        candidates = await db.locations.aggregate(vector_pipeline).to_list(length=10)
+    else:
+        # No vibe query: fall back to nearest reachable.
+        candidates = await db.locations.find(
+            {"placeId": {"$in": reachable_ids}}, projection={"embedding": 0}
+        ).to_list(length=10)
 
-  return {
-    isSuccess: true,
-    candidates: candidates.map((loc: any) => ({
-      placeId: loc.placeId,
-      name: loc.name,
-      formattedAddress: loc.formattedAddress,
-      coordinates: loc.geoPoint.coordinates, // [lon, lat]
-      costTier: loc.costTier,
-      tags: loc.tags,
-      distKms: Math.round((distById.get(loc.placeId) ?? 0) / 1000)
-    }))
-  };
-}
+    return {
+        "isSuccess": True,
+        "candidates": [
+            {
+                "placeId": loc["placeId"],
+                "name": loc["name"],
+                "formattedAddress": loc.get("formattedAddress"),
+                "coordinates": loc["geoPoint"]["coordinates"],  # [lon, lat]
+                "costTier": loc["costTier"],
+                "tags": loc["tags"],
+                "distKms": round(dist_by_id.get(loc["placeId"], 0) / 1000),
+            }
+            for loc in candidates
+        ],
+    }
 ```
 
 ---
@@ -277,62 +287,49 @@ The schema is deliberately strict, forcing Gemini to provide well-formed money, 
 }
 ```
 
-### 4.3 Backend Logic (Node.js — with integer conversion)
-```typescript
-// Build a stored MoneyAmount (currency, exponent, minorUnits, major, minor) from integer minor units.
-function toStoredMoney(minorUnits: bigint, currency: string) {
-  const exponent = exponentOf(currency);              // never hardcode — ISO 4217 lookup
-  const factor = 10n ** BigInt(exponent);
-  return {
-    currency,
-    exponent,
-    minorUnits: Long.fromString(minorUnits.toString()),
-    major: Long.fromString((minorUnits / factor).toString()),
-    minor: exponent === 0 ? '' : (minorUnits % factor).toString().padStart(exponent, '0')
-  };
-}
+### 4.3 Backend Logic (Python / Motor — with integer conversion)
+```python
+async def handle_create_node(params: dict) -> dict:
+    journey = await db.journeys.find_one({"_id": ObjectId(params["journeyId"])})
+    if journey is None:
+        return error_contract("ERR_NOT_FOUND", f"Journey {params['journeyId']} not found.", "ABORT")
 
-async function handleCreateNode(params: any) {
-  const journey = await db.collection('journeys').findOne({ _id: new ObjectId(params.journeyId) });
-  if (!journey) {
-    return errorContract('ERR_NOT_FOUND', `Journey ${params.journeyId} not found.`, 'ABORT');
-  }
-  if (exponentOf(params.price.localCurrency) === undefined) {
-    return errorContract('ERR_UNKNOWN_CURRENCY', `No exponent for ${params.price.localCurrency}.`, 'ASK_USER_CURRENCY');
-  }
+    local_currency = params["price"]["localCurrency"]
+    try:
+        local_money = to_stored_money(int(params["price"]["localMinorUnits"]), local_currency)
+    except UnknownCurrencyError:
+        return error_contract("ERR_UNKNOWN_CURRENCY", f"No exponent for {local_currency}.", "ASK_USER_CURRENCY")
 
-  // FX conversion happens once, at capture; round to integer display minor units.
-  const localMinor = BigInt(params.price.localMinorUnits);
-  const displayMinor = BigInt(Math.round(Number(localMinor) * params.price.fxRate));
+    # FX conversion happens once, at capture; round to integer display minor units.
+    display_minor = round(int(params["price"]["localMinorUnits"]) * params["price"]["fxRate"])
 
-  const document = {
-    journeyId: new ObjectId(params.journeyId),
-    seededByChoiceId: params.seededByChoiceId ? new ObjectId(params.seededByChoiceId) : null,
-    placeId: params.placeId ?? null,
-    dayNumber: params.dayNumber,
-    orderInDay: params.orderInDay,
-    time: params.time,
-    title: params.title,
-    location: {
-      name: params.location.name,
-      address: params.location.address ?? '',
-      coordinates: { type: 'Point', coordinates: params.location.coordinates } // [lon, lat]
-    },
-    transport: params.transport ?? '',
-    priceCategory: params.priceCategory,
-    price: {
-      display: toStoredMoney(displayMinor, journey.budgetCurrency), // exponent from journey.budgetCurrency
-      local: toStoredMoney(localMinor, params.price.localCurrency),  // exponent from localCurrency (NOT hardcoded)
-      fxRate: params.price.fxRate,
-      asOf: new Date()
-    },
-    senses: params.senses,
-    createdAt: new Date()
-  };
+    document = {
+        "journeyId": ObjectId(params["journeyId"]),
+        "seededByChoiceId": ObjectId(params["seededByChoiceId"]) if params.get("seededByChoiceId") else None,
+        "placeId": params.get("placeId"),
+        "dayNumber": params["dayNumber"],
+        "orderInDay": params["orderInDay"],
+        "time": params.get("time"),
+        "title": params["title"],
+        "location": {
+            "name": params["location"]["name"],
+            "address": params["location"].get("address", ""),
+            "coordinates": {"type": "Point", "coordinates": params["location"]["coordinates"]},  # [lon, lat]
+        },
+        "transport": params.get("transport", ""),
+        "priceCategory": params["priceCategory"],
+        "price": {
+            "display": to_stored_money(display_minor, journey["budgetCurrency"]),  # exponent from budgetCurrency
+            "local": local_money,                                                  # exponent from localCurrency (not hardcoded)
+            "fxRate": params["price"]["fxRate"],
+            "asOf": datetime.now(tz=timezone.utc),
+        },
+        "senses": params["senses"],
+        "createdAt": datetime.now(tz=timezone.utc),
+    }
 
-  const result = await db.collection('nodes').insertOne(document);
-  return { isSuccess: true, nodeId: result.insertedId.toString() };
-}
+    result = await db.nodes.insert_one(document)
+    return {"isSuccess": True, "nodeId": str(result.inserted_id)}
 ```
 > Note: `embedding` is generated by a separate backend step (Voyage AI over `senses.story + searchTags`) and is not part of the agent's `create_node` payload, to keep the agent's token cost low.
 
@@ -362,34 +359,32 @@ Once a day is written and the user commits the next choice, Gemini calls this to
 }
 ```
 
-### 5.3 Backend Logic (Node.js)
-```typescript
-async function handleUpdateJourney(params: any) {
-  const deductAmount = BigInt(params.deductBudgetMinor);   // integer minor units
+### 5.3 Backend Logic (Python / Motor)
+```python
+async def handle_update_journey(params: dict) -> dict:
+    deduct = int(params["deductBudgetMinor"])   # integer minor units
 
-  // Atomic $set / $inc / $addToSet to avoid concurrent-update races.
-  const updated = await db.collection('journeys').findOneAndUpdate(
-    { _id: new ObjectId(params.journeyId) },
-    {
-      $set: {
-        currentDay: params.currentDay,
-        currentLocation: { type: 'Point', coordinates: params.newLocationCoordinates }, // [lon, lat]
-        updatedAt: new Date()
-      },
-      $inc: { remainingBudgetMinor: Long.fromString((-deductAmount).toString()) }, // integer deduction
-      $addToSet: { visitedTags: { $each: params.appendTags ?? [] } }
-    },
-    { returnDocument: 'after' }
-  );
+    # Atomic $set / $inc / $addToSet to avoid concurrent-update races.
+    updated = await db.journeys.find_one_and_update(
+        {"_id": ObjectId(params["journeyId"])},
+        {
+            "$set": {
+                "currentDay": params["currentDay"],
+                "currentLocation": {"type": "Point", "coordinates": params["newLocationCoordinates"]},  # [lon, lat]
+                "updatedAt": datetime.now(tz=timezone.utc),
+            },
+            "$inc": {"remainingBudgetMinor": Int64(-deduct)},          # integer deduction (Int64 == NumberLong)
+            "$addToSet": {"visitedTags": {"$each": params.get("appendTags", [])}},
+        },
+        return_document=ReturnDocument.AFTER,
+    )
 
-  if (!updated) {
-    return errorContract('ERR_NOT_FOUND', `Journey ${params.journeyId} not found.`, 'ABORT');
-  }
-  return {
-    isSuccess: true,
-    currentDay: updated.currentDay,
-    remainingBudgetMinor: updated.remainingBudgetMinor.toString() // string
-  };
-}
+    if updated is None:
+        return error_contract("ERR_NOT_FOUND", f"Journey {params['journeyId']} not found.", "ABORT")
+    return {
+        "isSuccess": True,
+        "currentDay": updated["currentDay"],
+        "remainingBudgetMinor": str(updated["remainingBudgetMinor"]),  # string
+    }
 ```
 > Guard: if `remainingBudgetMinor` would go negative, the choice layer should already have blocked the option via the budget guard ([`Backend-Coding-Standards.md` §1.6](Backend-Coding-Standards.md)); a negative result here indicates an upstream bug and should surface `ERR_BUDGET_EXHAUSTED`.

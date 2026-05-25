@@ -1,6 +1,6 @@
 # Project Mini Map — MongoDB Data Models Specification (Draft V1.0)
 
-This document establishes the official BSON schemas, validation rules, relationship mappings, and index layouts for MongoDB Atlas. It serves as the single source of truth for Next.js developers, MongoDB DBA configuration, and Gemini MCP Tool integration.
+This document establishes the official BSON schemas, validation rules, relationship mappings, and index layouts for MongoDB Atlas. It serves as the single source of truth for the Python backend, the Next.js frontend, MongoDB DBA configuration, and Gemini MCP tool integration.
 
 ---
 
@@ -12,7 +12,7 @@ These nested structures are reused across multiple collections to maintain stric
 
 Monetary values are **never** stored as floats or decimals. The backend stores an **integer count of the currency's smallest unit** (its *minor unit*) — MYR 44.00 is `4400` (44 × 100) — and all arithmetic (budget guard, running totals, category rollups) is integer addition/comparison. The frontend receives the value **pre-split** into three parts so it never does float math either: the integer total (`4400`), the major part (`44`), and the zero-padded minor part (`"00"`).
 
-> **Storage vs wire:** in BSON, `minorUnits` / `major` are stored as `NumberLong` (see examples below). On the **JSON wire** (MCP responses and the frontend REST API) they are transmitted as **decimal strings** (`"4400"`, `"44"`) to avoid IEEE-754 / 2⁵³ precision loss — `exponent` stays a number. See [`Backend-Coding-Standards.md` §1.2](Backend-Coding-Standards.md).
+> **Storage vs wire:** in BSON, `minorUnits` / `major` are stored as `NumberLong` (int64; the Python/Motor driver surfaces them as `int`, which is arbitrary-precision). On the **JSON wire** (MCP responses and the frontend REST API) they are transmitted as **decimal strings** (`"4400"`, `"44"`) to avoid IEEE-754 / 2⁵³ precision loss in JS clients — `exponent` stays a number. See [`Backend-Coding-Standards.md` §1.2](Backend-Coding-Standards.md).
 
 #### `MoneyAmount` — a single-currency amount
 Used for any **displayed** amount: budgets, rollups, and forward estimates.
