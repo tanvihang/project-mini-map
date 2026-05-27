@@ -1,0 +1,35 @@
+# Mini-Map Backend — locked third-party dependencies.
+# Well-known packages are pinned with ==. The fast-moving Google / MCP
+# packages use a floor (>=) and are frozen to exact versions after the
+# first successful `pip install` (see README "Locking dependencies").
+
+# --- Web framework (async) ---
+# Floor-pinned: fastapi/starlette are co-resolved with google-adk, then frozen.
+fastapi>=0.116.0
+uvicorn[standard]>=0.34.0
+
+# --- Validation / settings ---
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
+python-dotenv==1.0.1
+
+# --- Data layer (async Mongo driver; Motor is deprecated) ---
+pymongo==4.10.1
+
+# --- HTTP client (async) ---
+httpx>=0.28.1
+
+# --- Google Gemini / Agent stack (floor-pinned, frozen on install) ---
+google-genai>=1.0.0
+google-adk>=1.0.0
+
+# --- MCP server framework for the geo service ---
+fastmcp>=2.3.0
+
+# --- Tests ---
+pytest==8.3.4
+pytest-asyncio==0.25.0
+
+# --- Lint / format (Google style) ---
+ruff==0.8.4
+black==24.10.0

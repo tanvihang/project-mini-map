@@ -1,0 +1,29 @@
+# --- Secrets: never commit real credentials ---
+.env
+.env.*
+!.env.example          # keep the committed template
+
+# --- Python virtual envs ---
+.venv/
+venv/
+env/
+
+# --- Runtime logs (per-service folders) ---
+logs/
+
+# --- Python caches / build ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- GCP service-account key (if ever placed locally) ---
+service-account.json
+*-sa.json
+
+# --- OS / editor noise ---
+.DS_Store
+.idea/
+.vscode/
