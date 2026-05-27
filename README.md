@@ -5,7 +5,7 @@
 [![Hackathon](https://img.shields.io/badge/Hackathon-Google%20Cloud%20Rapid%20Agent-blue)](https://rapid-agent.devpost.com)
 [![Track](https://img.shields.io/badge/Track-MongoDB%20Atlas-green)](https://www.mongodb.com/)
 [![Powered by](https://img.shields.io/badge/Powered%20by-Gemini%20%2B%20Agent%20Builder-orange)](https://cloud.google.com/vertex-ai)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](LICENSE)
 
 ---
 
