@@ -8,6 +8,7 @@ knows operation names and the routing table.
 from __future__ import annotations
 
 import logging
+import time
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import ValidationError
@@ -81,17 +82,32 @@ async def gateway(
         )
 
     payload = await _read_payload(request)
-    logger.info("dispatch operation=%s method=%s", operation.value, method)
-    await security.audit(operation.value)
+    logger.debug("recv operation=%s method=%s", operation.value, method)
+    start = time.perf_counter()
+
+    def _dur_ms() -> float:
+        return (time.perf_counter() - start) * 1000.0
 
     try:
         data = await rpc.call(method, payload)
     except MethodNotFoundError:
+        security.audit(
+            operation.value,
+            ok=False,
+            error_code="ERR_NOT_REGISTERED",
+            duration_ms=_dur_ms(),
+        )
         raise HTTPException(
             status_code=503,
             detail=f"service for {operation.value} not registered",
         ) from None
     except ValidationError:
+        security.audit(
+            operation.value,
+            ok=False,
+            error_code=ERR_VALIDATION,
+            duration_ms=_dur_ms(),
+        )
         contract = error_contract(
             ERR_VALIDATION, "payload failed boundary validation"
         )
@@ -105,6 +121,12 @@ async def gateway(
         raise
     except Exception:  # noqa: BLE001 - never leak internals to the client
         logger.exception("operation %s failed", operation.value)
+        security.audit(
+            operation.value,
+            ok=False,
+            error_code=ERR_INTERNAL,
+            duration_ms=_dur_ms(),
+        )
         contract = error_contract(ERR_INTERNAL, "internal error")
         return GatewayResponse(
             ok=False,
@@ -115,10 +137,15 @@ async def gateway(
 
     # A service returning the structured failure contract maps to ok=False.
     if isinstance(data, dict) and data.get("isSuccess") is False:
+        code = data.get("errorCode")
+        security.audit(
+            operation.value, ok=False, error_code=code, duration_ms=_dur_ms()
+        )
         return GatewayResponse(
             ok=False,
             operation=operation.value,
             data=data,
-            error=data.get("errorCode"),
+            error=code,
         )
+    security.audit(operation.value, ok=True, duration_ms=_dur_ms())
     return GatewayResponse(ok=True, operation=operation.value, data=data)

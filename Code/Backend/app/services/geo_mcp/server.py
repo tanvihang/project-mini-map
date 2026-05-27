@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
+from app.core.config import get_settings
+from app.core.logging_config import configure_logging
 from app.services.geo_mcp.service import query_reachable
 
 mcp = FastMCP("minimap-geo")
@@ -40,4 +42,5 @@ async def get_reachable_locations(
 
 
 if __name__ == "__main__":
+    configure_logging(get_settings().log_level)  # same format + trace-id field
     mcp.run()

@@ -66,7 +66,8 @@ async def query_reachable(
     except (
         Exception
     ) as exc:  # noqa: BLE001 - degrade to a contract, never raise
-        logger.warning("geo pipeline failed (%s)", exc)
+        # Log the concise cause only; the full driver topology dump is noise.
+        logger.warning("geo pipeline unavailable (%s)", type(exc).__name__)
         return error_contract(ERR_INTERNAL, "geo lookup failed")
 
     if not candidates:

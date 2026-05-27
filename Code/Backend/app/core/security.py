@@ -37,6 +37,18 @@ def check_gateway_key(provided: str) -> bool:
     return hmac.compare_digest(provided or "", expected)
 
 
-async def audit(operation: str, actor: str = "anonymous", **detail) -> None:
-    """Emit a structured audit line for one gateway operation."""
-    audit_logger.info("op=%s actor=%s detail=%s", operation, actor, detail)
+def audit(
+    operation: str,
+    *,
+    ok: bool,
+    error_code: str | None = None,
+    duration_ms: float | None = None,
+) -> None:
+    """Emit one outcome line per gateway operation (§8): op, result, duration."""
+    audit_logger.info(
+        "op=%s ok=%s code=%s dur_ms=%s",
+        operation,
+        ok,
+        error_code or "-",
+        f"{duration_ms:.1f}" if duration_ms is not None else "-",
+    )

@@ -31,7 +31,7 @@ from app.services.budget import service as budget_service
 from app.services.geo_mcp import service as geo_service
 from app.services.journey import service as journey_service
 
-logger = logging.getLogger("minimap")
+logger = logging.getLogger("minimap.system")
 
 
 def _register_services() -> None:

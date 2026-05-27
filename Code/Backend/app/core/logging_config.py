@@ -28,6 +28,7 @@ LOG_DIR = Path(__file__).resolve().parents[2] / "logs"
 # Logger name -> its own service log folder. Folders are never mixed, so each
 # service (and the gateway) owns an isolated directory you can grep.
 _SERVICE_FOLDERS: dict[str, str] = {
+    "minimap.system": "gateway",  # app lifecycle / startup / unhandled errors
     "minimap.gateway": "gateway",
     "minimap.security": "gateway",
     "minimap.config": "gateway",
@@ -37,6 +38,17 @@ _SERVICE_FOLDERS: dict[str, str] = {
     "minimap.budget": "budget",
     "minimap.geo": "geo_mcp",
 }
+
+# Third-party loggers re-pointed through the shared console handler so EVERY
+# component (the ASGI server, the MCP framework) logs in the same format with
+# the same trace-id field — no second format anywhere.
+_EXTERNAL_LOGGERS = (
+    "uvicorn",
+    "uvicorn.error",
+    "uvicorn.access",
+    "fastmcp",
+    "mcp",
+)
 
 _LOG_FORMAT = (
     "[%(asctime)s] [%(trace_id)s] [%(levelname)s] - [%(name)s]: %(message)s"
@@ -107,5 +119,13 @@ def configure_logging(level: str = "INFO") -> None:
             svc_logger.setLevel(level)
             svc_logger.addHandler(handler)
             svc_logger.propagate = True  # also surface on the console
+
+    # Strip third-party handlers and let them propagate to our root console,
+    # so their lines use the one shared formatter + trace filter.
+    for name in _EXTERNAL_LOGGERS:
+        ext = logging.getLogger(name)
+        ext.handlers = []
+        ext.propagate = True
+        ext.setLevel(level)
 
     _configured = True
