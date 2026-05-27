@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 
+from app.core.errors import success
 from app.core.rpc import RpcRegistry
 from app.core.rpc import rpc as _rpc
 from app.models.schemas import JourneyNextDayRequest, JourneyStartRequest
@@ -21,21 +22,19 @@ async def _run_agent(state: dict) -> dict:
     """Produce one journal day from the current state (stub tool-loop).
 
     Demonstrates inter-service RPC: it asks the geo service for reachable POIs
-    (empty without a live DB) rather than importing geo_mcp directly.
+    rather than importing geo_mcp directly. Geo returns the structured contract,
+    so we read ``candidates`` only when ``isSuccess`` is true.
     """
+    lng, lat = state.get("currentLocation", [0.0, 0.0])
     geo = await _rpc.call(
         "geo.reachable",
-        {
-            "lng": state.get("lng", 0.0),
-            "lat": state.get("lat", 0.0),
-            "max_km": 50.0,
-            "limit": 5,
-        },
+        {"longitude": lng, "latitude": lat, "maxDistanceMeters": 50_000},
     )
+    reachable = geo.get("candidates", []) if geo.get("isSuccess") else []
     return {
-        "day_number": state.get("day", 1),
+        "dayNumber": state.get("currentDay", 1),
         "title": f"Arrive in {state.get('destination', 'destination')}",
-        "reachable_count": geo["count"],
+        "reachableCount": len(reachable),
         "stub": True,
     }
 
@@ -45,22 +44,29 @@ async def start(payload: dict) -> dict:
     req = JourneyStartRequest(**payload)
     state = {
         "destination": req.destination,
-        "total_days": req.total_days,
-        "day": 1,
-        "lng": 0.0,
-        "lat": 0.0,
+        "totalDays": req.total_days,
+        "currentDay": 1,
+        "budgetCurrency": req.budget_currency,
+        "remainingBudgetMinor": int(req.total_budget_minor),
+        "currentLocation": [0.0, 0.0],
     }
     day = await _run_agent(state)
-    return {"journey_id": "stub-journey", "state": state, "day": day}
+    return success(journeyId="stub-journey", state=state, day=day)
 
 
 async def next_day(payload: dict) -> dict:
-    """Advance the journey using the traveller's chosen option."""
+    """Advance the journey using the traveller's chosen option index."""
     req = JourneyNextDayRequest(**payload)
     day = await _run_agent(
-        {"destination": "continuation", "journey_id": req.journey_id, "day": 2}
+        {
+            "destination": "continuation",
+            "currentDay": 2,
+            "currentLocation": [0.0, 0.0],
+        }
     )
-    return {"journey_id": req.journey_id, "chosen": req.chosen_option_id, "day": day}
+    return success(
+        journeyId=req.journey_id, chosenIndex=req.chosen_index, day=day
+    )
 
 
 def register(rpc: RpcRegistry) -> None:

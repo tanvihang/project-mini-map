@@ -10,11 +10,22 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from app.api.gateway import router as gateway_router
 from app.core import security
-from app.core.config import close_clients, get_settings
-from app.core.logging_config import configure_logging, new_trace_id, trace_id_var
+from app.core.config import (
+    close_clients,
+    enforce_required_settings,
+    get_settings,
+)
+from app.core.errors import ERR_INTERNAL, ERR_VALIDATION, error_contract
+from app.core.logging_config import (
+    configure_logging,
+    new_trace_id,
+    trace_id_var,
+)
 from app.core.rpc import rpc
 from app.services.budget import service as budget_service
 from app.services.geo_mcp import service as geo_service
@@ -45,6 +56,7 @@ async def lifespan(_app: FastAPI):
     """Startup/shutdown: register services, probe creds, close clients."""
     settings = get_settings()
     configure_logging(settings.log_level)
+    enforce_required_settings()  # §9 fail-fast in production
 
     _register_services()
     logger.info("registered RPC methods: %s", rpc.methods())
@@ -78,6 +90,24 @@ async def trace_id_middleware(request: Request, call_next):
 
 
 app.include_router(gateway_router)
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_handler(_request: Request, _exc: RequestValidationError):
+    """Map request-validation failures to the ERR_VALIDATION contract (§3)."""
+    return JSONResponse(
+        status_code=422,
+        content=error_contract(ERR_VALIDATION, "request validation failed"),
+    )
+
+
+@app.exception_handler(Exception)
+async def _unhandled_handler(_request: Request, _exc: Exception):
+    """Never leak internals: map uncaught errors to the ERR_INTERNAL contract (§4.3)."""
+    logger.exception("unhandled error")
+    return JSONResponse(
+        status_code=500, content=error_contract(ERR_INTERNAL, "internal error")
+    )
 
 
 @app.get("/healthz")

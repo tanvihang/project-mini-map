@@ -1,26 +1,53 @@
-"""Strong-typed contracts: operations, gateway envelope, and the Node schema.
+"""Strong-typed contracts mirroring docs/engineering/Data-Models.md.
 
-Monetary values are always integer minor units (e.g. cents) carried inside the
-``Money`` type — never bare floats — so currency math stays exact.
+Conventions (Backend-Coding-Standards §7.1):
+- Python attributes are snake_case; JSON/BSON keys are camelCase via the alias
+  generator. Response models serialize with by_alias=True (FastAPI default).
+- Input models set ``extra="forbid"`` — untrusted LLM/API JSON is rejected at
+  the boundary (§3).
+- Money uses MoneyAmount/Money (integer minor units; see app/core/money.py).
+- GeoJSON coordinates are ALWAYS [longitude, latitude] (§2.1).
 """
 
 from __future__ import annotations
 
+import re
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic.alias_generators import to_camel
+
+from app.core.money import Money, MoneyAmount
+
+OBJECT_ID = re.compile(r"^[a-f\d]{24}$", re.I)
 
 
-# --- Operation contract ----------------------------------------------------
+class CamelModel(BaseModel):
+    """Base for stored/response models: snake_case attrs, camelCase wire keys."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+class StrictInput(BaseModel):
+    """Base for boundary inputs: camelCase + reject unknown fields (§3)."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel, populate_by_name=True, extra="forbid"
+    )
+
+
+def _validate_object_id(value: str | None) -> str | None:
+    if value is not None and not OBJECT_ID.match(value):
+        raise ValueError("invalid ObjectId")
+    return value
+
+
+# --- Operation contract (gateway) ------------------------------------------
 
 
 class OperationType(str, Enum):
-    """The values the gateway accepts in the ``X-Operation-Type`` header.
-
-    This enum IS the public surface: the frontend speaks these names, the
-    gateway maps each to exactly one internal RPC method.
-    """
+    """Values accepted in the ``X-Operation-Type`` header."""
 
     HEALTH_PING = "HEALTH_PING"
     JOURNEY_START = "JOURNEY_START"
@@ -30,156 +57,248 @@ class OperationType(str, Enum):
 
 
 class GatewayResponse(BaseModel):
-    """Uniform envelope returned by the single gateway endpoint."""
+    """Uniform REST envelope. Carries the service's structured result in ``data``."""
 
     ok: bool
     operation: str
     data: Any = None
-    error: Optional[str] = None
+    error: str | None = None
 
 
-# --- Money (integer minor units) -------------------------------------------
+# --- Geo --------------------------------------------------------------------
 
 
-class Money(BaseModel):
-    """A monetary amount in minor units of a single currency."""
+class GeoPoint(CamelModel):
+    """GeoJSON Point — coordinates are [longitude, latitude]."""
 
-    currency: str = Field(..., examples=["MYR"])
-    exponent: int = Field(2, description="Number of minor-unit decimals.")
-    minor_units: int = Field(..., description="Amount in minor units (e.g. cents).")
-
-
-class Price(BaseModel):
-    """Display + local currency pair with the FX rate used to derive display."""
-
-    display: Money
-    local: Money
-    fx_rate: float
-    as_of: str
-
-
-# --- Node sub-documents (mirror the README node schema) --------------------
-
-
-class GeoPoint(BaseModel):
-    """GeoJSON Point: coordinates are [longitude, latitude]."""
-
-    type: str = "Point"
+    type: Literal["Point"] = "Point"
     coordinates: list[float] = Field(..., min_length=2, max_length=2)
 
 
-class Location(BaseModel):
+# --- Node sub-documents (Data-Models §3) -----------------------------------
+
+
+class Location(CamelModel):
     name: str
-    address: Optional[str] = None
+    address: str | None = None
     coordinates: GeoPoint
 
 
-class Weather(BaseModel):
-    condition: Optional[str] = None
-    temp_c: Optional[float] = None
-    source: Optional[str] = None
+class Weather(CamelModel):
+    condition: str | None = None
+    temp_c: float | None = None
+    source: str | None = None
 
 
-class Senses(BaseModel):
-    see: Optional[str] = None
-    hear: Optional[str] = None
-    smell: Optional[str] = None
-    taste: Optional[str] = None
-    touch: Optional[str] = None
-    mood: Optional[str] = None
-    story: Optional[str] = None
+class Senses(CamelModel):
+    see: str | None = None
+    hear: str | None = None
+    smell: str | None = None
+    taste: str | None = None
+    touch: str | None = None
+    mood: str | None = None
+    story: str | None = None
 
 
-class Dialogue(BaseModel):
+class Dialogue(CamelModel):
     speaker: str
     language: str
     text: str
-    translation: Optional[str] = None
+    translation: str | None = None
 
 
-class LocalPhrase(BaseModel):
+class LocalPhrase(CamelModel):
     phrase: str
-    pronunciation: Optional[str] = None
-    meaning: Optional[str] = None
+    pronunciation: str | None = None
+    meaning: str | None = None
 
 
-class Culture(BaseModel):
+class Culture(CamelModel):
     culture_tips: list[str] = Field(default_factory=list)
-    local_phrase: Optional[LocalPhrase] = None
+    local_phrase: LocalPhrase | None = None
     dos_donts: dict[str, list[str]] = Field(default_factory=dict)
 
 
-class Practical(BaseModel):
-    opening_hours: Optional[str] = None
-    crowd_level: Optional[str] = None
-    best_time_to_visit: Optional[str] = None
-    photo_tip: Optional[str] = None
+class Practical(CamelModel):
+    opening_hours: str | None = None
+    crowd_level: str | None = None
+    best_time_to_visit: str | None = None
+    photo_tip: str | None = None
     booking_required: bool = False
 
 
-class Media(BaseModel):
+class Media(CamelModel):
     reference_photos: list[str] = Field(default_factory=list)
-    ambient_sound: Optional[str] = None
+    ambient_sound: str | None = None
 
 
-class Node(BaseModel):
-    """One stop in a journey — a single document in the ``nodes`` collection."""
+PriceCategory = Literal["accommodation", "food", "transport", "entry", "other"]
 
-    journey_id: Optional[str] = None
-    day_number: int
-    order_in_day: int = 0
-    time: Optional[str] = None
+
+class Node(CamelModel):
+    """One stop in a journey (the ``nodes`` collection).
+
+    ``embedding`` is omitted on purpose — non-vector reads MUST project it
+    out (§5.1).
+    """
+
+    journey_id: str | None = None
+    seeded_by_choice_id: str | None = None
+    place_id: str | None = None
+    day_number: int = Field(..., ge=1)
+    order_in_day: int = Field(0, ge=0)
+    time: str | None = None
     title: str
     location: Location
-    transport: Optional[str] = None
-    weather: Optional[Weather] = None
-    price_category: Optional[str] = None
-    price: Optional[Price] = None
-    senses: Optional[Senses] = None
+    transport: str | None = None
+    weather: Weather | None = None
+    price_category: PriceCategory
+    price: Money
+    senses: Senses
     dialogues: list[Dialogue] = Field(default_factory=list)
-    culture: Optional[Culture] = None
-    practical: Optional[Practical] = None
-    media: Optional[Media] = None
+    culture: Culture | None = None
+    practical: Practical | None = None
+    media: Media | None = None
     search_tags: list[str] = Field(default_factory=list)
 
 
-# --- Service request / result models ---------------------------------------
+# --- Journey state (Data-Models §2) ----------------------------------------
+
+JourneyStatus = Literal["ready", "generating", "active", "completed"]
 
 
-class JourneyStartRequest(BaseModel):
+class JourneyState(CamelModel):
+    journey_id: str | None = None
+    user_id: str
     destination: str
-    total_days: int = Field(..., ge=1)
-    total_budget: Money
-    style: str
+    total_days: int = Field(..., ge=1, le=14)
+    current_day: int = Field(0, ge=0)
+    budget_currency: str
+    budget_exponent: int = Field(..., ge=0)
+    total_budget_minor: int = Field(..., ge=0)
+    remaining_budget_minor: int
+    travel_style: str | None = None
+    interests: list[str] = Field(default_factory=list)
+    current_location: GeoPoint | None = None
+    visited_tags: list[str] = Field(default_factory=list)
+    status: JourneyStatus = "ready"
+
+
+# --- Choices (Data-Models §4) ----------------------------------------------
+
+ChoiceType = Literal["move", "activity", "explore", "slow"]
+
+
+class ChoiceOption(CamelModel):
+    type: ChoiceType
+    title: str
+    description: str
+    estimated_cost: MoneyAmount
+    travel_time_from_current: str | None = None
+    destination_coordinates: GeoPoint
+    destination_name: str
+    tags: list[str] = Field(default_factory=list)
+    is_recommended: bool = False
+
+
+# --- MCP tool input models (MCP-Tools.md), used by the gateway operations ---
+
+
+class GetJourneyStateInput(StrictInput):
+    journey_id: str
+
+    _vid = field_validator("journey_id")(_validate_object_id)
+
+
+class GetReachableLocationsInput(StrictInput):
+    """Mirror of the ``get_reachable_locations`` tool inputSchema."""
+
+    longitude: float
+    latitude: float
+    max_distance_meters: int = Field(200_000, gt=0)
+    exclude_tags: list[str] = Field(default_factory=list)
+    interest_query: str | None = None
+
+
+class PriceInput(StrictInput):
+    local_currency: str = Field(min_length=3, max_length=3)
+    local_minor_units: str = Field(pattern=r"^\d+$")  # string -> int downstream
+    fx_rate: float = Field(gt=0)
+
+
+class CreateNodeLocationInput(StrictInput):
+    name: str
+    address: str | None = None
+    coordinates: list[float] = Field(
+        ..., min_length=2, max_length=2
+    )  # [lon, lat]
+
+
+class SensesInput(StrictInput):
+    see: str
+    hear: str
+    smell: str
+    taste: str | None = None
+    touch: str | None = None
+    mood: str | None = None
+    story: str
+
+
+class CreateNodeInput(StrictInput):
+    journey_id: str
+    day_number: int = Field(ge=1)
+    order_in_day: int = Field(ge=0)
+    time: str | None = None
+    title: str = Field(min_length=1)
+    seeded_by_choice_id: str | None = None
+    place_id: str | None = None
+    location: CreateNodeLocationInput
+    transport: str | None = None
+    price_category: PriceCategory
+    price: PriceInput
+    senses: SensesInput
+
+    _vj = field_validator("journey_id", "seeded_by_choice_id")(
+        _validate_object_id
+    )
+
+
+class UpdateJourneyInput(StrictInput):
+    journey_id: str
+    current_day: int = Field(ge=0)
+    deduct_budget_minor: str = Field(pattern=r"^\d+$")
+    new_location_coordinates: list[float] = Field(
+        ..., min_length=2, max_length=2
+    )
+    append_tags: list[str] = Field(default_factory=list)
+
+    _vj = field_validator("journey_id")(_validate_object_id)
+
+
+# --- Gateway operation requests --------------------------------------------
+
+
+class JourneyStartRequest(StrictInput):
+    user_id: str
+    destination: str
+    total_days: int = Field(..., ge=1, le=14)
+    total_budget_minor: str = Field(pattern=r"^\d+$")
+    budget_currency: str
+    travel_style: str | None = None
     interests: list[str] = Field(default_factory=list)
 
 
-class JourneyNextDayRequest(BaseModel):
+class JourneyNextDayRequest(StrictInput):
     journey_id: str
-    chosen_option_id: str
+    chosen_index: int = Field(ge=0)
+
+    _vj = field_validator("journey_id")(_validate_object_id)
 
 
-class BudgetCheckRequest(BaseModel):
-    """Inputs for the deterministic remaining-budget-per-day guard."""
+class BudgetCheckRequest(StrictInput):
+    """Integer-only budget guard inputs (§1.6). Minor amounts arrive as strings."""
 
-    remaining_minor: int = Field(..., ge=0)
+    remaining_budget_minor: str = Field(pattern=r"^\d+$")
     remaining_days: int = Field(..., ge=1)
-    option_cost_minor: int = Field(..., ge=0)
+    estimated_cost_minor: str = Field(pattern=r"^\d+$")
     currency: str = "MYR"
-
-
-class BudgetCheckResult(BaseModel):
-    approved: bool
-    ceiling_minor: int
-    option_cost_minor: int
-    currency: str
-    reason: str
-
-
-class GeoReachableRequest(BaseModel):
-    """Find POIs physically reachable from a point (GeoJSON [lng, lat])."""
-
-    lng: float
-    lat: float
-    max_km: float = Field(200.0, gt=0)
-    limit: int = Field(20, ge=1, le=100)

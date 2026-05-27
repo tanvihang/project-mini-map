@@ -38,7 +38,9 @@ _SERVICE_FOLDERS: dict[str, str] = {
     "minimap.geo": "geo_mcp",
 }
 
-_LOG_FORMAT = "[%(asctime)s] [%(trace_id)s] [%(levelname)s] - [%(name)s]: %(message)s"
+_LOG_FORMAT = (
+    "[%(asctime)s] [%(trace_id)s] [%(levelname)s] - [%(name)s]: %(message)s"
+)
 _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 _configured = False
@@ -95,7 +97,9 @@ def configure_logging(level: str = "INFO") -> None:
     for folder, logger_names in folder_to_loggers.items():
         folder_path = LOG_DIR / folder
         folder_path.mkdir(parents=True, exist_ok=True)
-        handler = logging.FileHandler(folder_path / f"{folder}.log", encoding="utf-8")
+        handler = logging.FileHandler(
+            folder_path / f"{folder}.log", encoding="utf-8"
+        )
         handler.setFormatter(formatter)
         handler.addFilter(trace_filter)
         for logger_name in logger_names:

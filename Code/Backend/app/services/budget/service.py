@@ -1,39 +1,45 @@
-"""Deterministic budget guard.
+"""Deterministic budget guard (Backend-Coding-Standards §1.6).
 
-No model, no randomness: an option is approved only if its cost stays within
-``(remaining_budget / remaining_days) * 1.5``. All math is in integer minor
-units so the verdict is exact and reproducible.
+No model, no randomness. The daily allowance is the ×1.5 rule written as
+integer math: ``threshold = remaining × 3 // (days × 2)``. All amounts are
+integer minor units carried on the wire as decimal strings.
 """
 
 from __future__ import annotations
 
+from app.core.errors import ERR_BUDGET_EXHAUSTED, error_contract, success
 from app.core.rpc import RpcRegistry
-from app.models.schemas import BudgetCheckRequest, BudgetCheckResult
+from app.models.schemas import BudgetCheckRequest
 
 
-def _ceiling_minor(remaining_minor: int, remaining_days: int) -> int:
-    """Per-day spend ceiling = (remaining / days) * 1.5, integer minor units."""
-    per_day = remaining_minor // remaining_days
-    return per_day * 3 // 2
+def threshold_minor(remaining_budget_minor: int, remaining_days: int) -> int:
+    """Per-day spend ceiling. ``(remaining / days) × 1.5`` as integer-only math."""
+    return remaining_budget_minor * 3 // (remaining_days * 2)
 
 
 async def check_budget(payload: dict) -> dict:
-    """Approve or hard-block one option against the per-day ceiling."""
+    """Approve, or hard-block with ERR_BUDGET_EXHAUSTED, against the ceiling."""
     req = BudgetCheckRequest(**payload)
-    ceiling = _ceiling_minor(req.remaining_minor, req.remaining_days)
-    approved = req.option_cost_minor <= ceiling
-    reason = (
-        "within per-day ceiling"
-        if approved
-        else f"cost {req.option_cost_minor} exceeds ceiling {ceiling}"
-    )
-    return BudgetCheckResult(
-        approved=approved,
-        ceiling_minor=ceiling,
-        option_cost_minor=req.option_cost_minor,
-        currency=req.currency,
-        reason=reason,
-    ).model_dump()
+    remaining = int(req.remaining_budget_minor)
+    cost = int(req.estimated_cost_minor)
+    ceiling = threshold_minor(remaining, req.remaining_days)
+
+    if cost <= ceiling:
+        return success(
+            approved=True,
+            thresholdMinor=str(ceiling),
+            estimatedCostMinor=str(cost),
+            currency=req.currency,
+        )
+    return {
+        **error_contract(
+            ERR_BUDGET_EXHAUSTED,
+            f"option cost {cost} exceeds the daily ceiling {ceiling}",
+        ),
+        "thresholdMinor": str(ceiling),
+        "estimatedCostMinor": str(cost),
+        "currency": req.currency,
+    }
 
 
 def register(rpc: RpcRegistry) -> None:

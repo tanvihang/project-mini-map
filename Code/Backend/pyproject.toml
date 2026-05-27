@@ -22,7 +22,14 @@ select = ["E", "F", "I", "UP", "B", "N", "C4", "D"]
 ignore = [
     "D203",  # one-blank-line-before-class (conflicts with D211)
     "D213",  # multi-line-summary-second-line (Google uses D212)
+    "E501",  # line length is owned by black; residual long strings are intentional
+    "D101",  # self-descriptive Pydantic data models don't need class docstrings
+    "D103",  # small RPC handlers/validators are self-documenting
+    "D107",  # __init__ docstrings not required
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]  # tests don't need docstrings
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -32,6 +39,7 @@ known-first-party = ["app"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"     # all async tests run without explicit marks
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 pythonpath = ["."]        # make the `app` package importable from repo root
 addopts = "-q"

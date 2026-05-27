@@ -47,6 +47,21 @@ in-process today, network-pluggable tomorrow.
 
 ## Async everywhere
 
-`AsyncMongoClient`, async RPC handlers, and FastAPI's async routes mean no
-handler blocks the event loop. Client singletons initialize lazily during the
-lifespan startup and never block boot when infrastructure is absent.
+Motor (`AsyncIOMotorClient`), async RPC handlers, and FastAPI's async routes
+mean no handler blocks the event loop. Client singletons initialize lazily and
+never block boot when infrastructure is absent.
+
+## Standards compliance (docs/engineering)
+
+- **Money** — integer minor units only, `exponent` from the ISO 4217 map,
+  `minorUnits`/`major` serialized as strings on the JSON wire (`app/core/money.py`).
+- **Budget guard** — integer `remaining × 3 // (days × 2)`.
+- **Geo** — `$geoNear` is pipeline stage 1, `[lon, lat]`, embedding projected
+  out, Top-N capped.
+- **Error contract** — boundary failures return
+  `{isSuccess, errorCode, errorMessage, fallbackAction}` (`app/core/errors.py`);
+  the gateway never leaks tracebacks.
+- **Validation** — every boundary input is a `extra="forbid"` Pydantic model.
+
+> Deviation flagged for the team: the data layer uses **Motor**, which is now
+> EOL — a future migration to the native PyMongo async API is advisable.

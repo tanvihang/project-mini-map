@@ -7,17 +7,17 @@ Built lazily and tolerantly: if google-adk or Vertex credentials are absent,
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from app.core.config import get_settings
 from app.services.journey.prompts import SYSTEM_PROMPT
 
 logger = logging.getLogger("minimap.agent")
 
-_root_agent: Optional[Any] = None
+_root_agent: Any | None = None
 
 
-def build_root_agent() -> Optional[Any]:
+def build_root_agent() -> Any | None:
     """Return a cached ADK root agent, or None if ADK is unavailable.
 
     To wire the MongoDB geo MCP server, add an MCPToolset that launches
@@ -29,7 +29,9 @@ def build_root_agent() -> Optional[Any]:
     try:
         from google.adk.agents import Agent
     except Exception as exc:  # noqa: BLE001 - tolerant stub mode
-        logger.warning("google-adk unavailable (%s); journey runs stubbed.", exc)
+        logger.warning(
+            "google-adk unavailable (%s); journey runs stubbed.", exc
+        )
         return None
 
     settings = get_settings()

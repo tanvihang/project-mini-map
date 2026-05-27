@@ -10,11 +10,13 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Header, HTTPException, Request
+from pydantic import ValidationError
 
 from app.core import security
 from app.core.config import get_settings
+from app.core.errors import ERR_INTERNAL, ERR_VALIDATION, error_contract
 from app.core.logging_config import trace_id_var
-from app.core.rpc import MethodNotFound, rpc
+from app.core.rpc import MethodNotFoundError, rpc
 from app.models.schemas import GatewayResponse, OperationType
 
 logger = logging.getLogger("minimap.gateway")
@@ -39,9 +41,13 @@ async def _read_payload(request: Request) -> dict:
     try:
         data = await request.json()
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail="invalid JSON body") from exc
+        raise HTTPException(
+            status_code=400, detail="invalid JSON body"
+        ) from exc
     if not isinstance(data, dict):
-        raise HTTPException(status_code=400, detail="body must be a JSON object")
+        raise HTTPException(
+            status_code=400, detail="body must be a JSON object"
+        )
     return data
 
 
@@ -56,7 +62,9 @@ async def gateway(
     # during rpc.call carry the same id (middleware runs in a separate context).
     trace_id_var.set(getattr(request.state, "trace_id", "-"))
 
-    if get_settings().gateway_api_key and not security.check_gateway_key(x_api_key):
+    if get_settings().gateway_api_key and not security.check_gateway_key(
+        x_api_key
+    ):
         raise HTTPException(status_code=401, detail="invalid api key")
 
     try:
@@ -78,14 +86,39 @@ async def gateway(
 
     try:
         data = await rpc.call(method, payload)
-    except MethodNotFound:
+    except MethodNotFoundError:
         raise HTTPException(
-            status_code=503, detail=f"service for {operation.value} not registered"
+            status_code=503,
+            detail=f"service for {operation.value} not registered",
         ) from None
+    except ValidationError:
+        contract = error_contract(
+            ERR_VALIDATION, "payload failed boundary validation"
+        )
+        return GatewayResponse(
+            ok=False,
+            operation=operation.value,
+            data=contract,
+            error=ERR_VALIDATION,
+        )
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001 - surface as 400 with the message
+    except Exception:  # noqa: BLE001 - never leak internals to the client
         logger.exception("operation %s failed", operation.value)
-        return GatewayResponse(ok=False, operation=operation.value, error=str(exc))
+        contract = error_contract(ERR_INTERNAL, "internal error")
+        return GatewayResponse(
+            ok=False,
+            operation=operation.value,
+            data=contract,
+            error=ERR_INTERNAL,
+        )
 
+    # A service returning the structured failure contract maps to ok=False.
+    if isinstance(data, dict) and data.get("isSuccess") is False:
+        return GatewayResponse(
+            ok=False,
+            operation=operation.value,
+            data=data,
+            error=data.get("errorCode"),
+        )
     return GatewayResponse(ok=True, operation=operation.value, data=data)

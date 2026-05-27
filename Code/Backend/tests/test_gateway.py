@@ -23,28 +23,63 @@ def test_health_ping_routes_to_system():
     assert body["data"]["pong"] is True
 
 
-def test_budget_check_routes_and_blocks_over_ceiling():
+def test_budget_check_blocks_over_ceiling():
     with TestClient(app) as client:
         resp = client.post(
             "/api/gateway",
             headers={"X-Operation-Type": "BUDGET_CHECK"},
             json={
-                "remaining_minor": 100000,
-                "remaining_days": 5,
-                "option_cost_minor": 40000,
+                "remainingBudgetMinor": "100000",
+                "remainingDays": 5,
+                "estimatedCostMinor": "40000",
                 "currency": "MYR",
             },
         )
     assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["approved"] is False  # ceiling = 30000, cost 40000
-    assert data["ceiling_minor"] == 30000
+    body = resp.json()
+    assert body["ok"] is False
+    assert body["error"] == "ERR_BUDGET_EXHAUSTED"
+    assert body["data"]["isSuccess"] is False
+    assert body["data"]["thresholdMinor"] == "30000"  # 100000*3//(5*2)
+
+
+def test_budget_check_approves_within_ceiling():
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/gateway",
+            headers={"X-Operation-Type": "BUDGET_CHECK"},
+            json={
+                "remainingBudgetMinor": "100000",
+                "remainingDays": 5,
+                "estimatedCostMinor": "25000",
+                "currency": "MYR",
+            },
+        )
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["data"]["approved"] is True
+    assert body["data"]["thresholdMinor"] == "30000"
+
+
+def test_invalid_payload_maps_to_err_validation():
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/gateway",
+            headers={"X-Operation-Type": "BUDGET_CHECK"},
+            json={"remainingDays": 5},  # missing required minor fields
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is False
+    assert body["error"] == "ERR_VALIDATION"
 
 
 def test_unknown_operation_is_400():
     with TestClient(app) as client:
         resp = client.post(
-            "/api/gateway", headers={"X-Operation-Type": "NOT_A_REAL_OP"}, json={}
+            "/api/gateway",
+            headers={"X-Operation-Type": "NOT_A_REAL_OP"},
+            json={},
         )
     assert resp.status_code == 400
 
@@ -65,8 +100,12 @@ def test_empty_body_is_tolerated():
 
 def test_trace_id_returned_and_unique():
     with TestClient(app) as client:
-        r1 = client.post("/api/gateway", headers={"X-Operation-Type": "HEALTH_PING"})
-        r2 = client.post("/api/gateway", headers={"X-Operation-Type": "HEALTH_PING"})
+        r1 = client.post(
+            "/api/gateway", headers={"X-Operation-Type": "HEALTH_PING"}
+        )
+        r2 = client.post(
+            "/api/gateway", headers={"X-Operation-Type": "HEALTH_PING"}
+        )
     assert r1.headers.get("X-Trace-Id")
     assert r2.headers.get("X-Trace-Id")
     assert r1.headers["X-Trace-Id"] != r2.headers["X-Trace-Id"]

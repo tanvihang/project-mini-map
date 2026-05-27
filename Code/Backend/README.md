@@ -19,6 +19,13 @@ app/
     geo_mcp/         $geoNear over Mongo, exposed via FastMCP
 ```
 
+Built to the team standards in `docs/engineering` (mirrored under `docs/`):
+integer-minor-unit money with string wire serialization (`app/core/money.py`),
+the `{isSuccess, errorCode, fallbackAction}` error contract (`app/core/errors.py`),
+`$geoNear`-stage-1 geo, camelCase `extra="forbid"` Pydantic boundaries, and the
+integer budget guard. The data layer uses **Motor** per the standard (flagged as
+EOL — a future migration to PyMongo async is advisable).
+
 See [`docs/architecture.md`](docs/architecture.md) and
 [`docs/interface.md`](docs/interface.md).
 

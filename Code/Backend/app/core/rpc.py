@@ -9,7 +9,8 @@ touching any caller.
 
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 Handler = Callable[[dict], Awaitable[Any]]
 
@@ -18,7 +19,7 @@ class RpcError(Exception):
     """Base class for RPC failures."""
 
 
-class MethodNotFound(RpcError):
+class MethodNotFoundError(RpcError):
     """Raised when no handler is registered for a method name."""
 
 
@@ -48,7 +49,7 @@ class RpcRegistry:
         """Invoke ``method`` with ``payload`` and await its result."""
         handler = self._handlers.get(method)
         if handler is None:
-            raise MethodNotFound(method)
+            raise MethodNotFoundError(method)
         return await handler(payload)
 
 
