@@ -351,7 +351,7 @@ More specifically:
 | Name | Role | GitHub |
 |---|---|---|
 | **Angus Tan** | Frontend Engineer | [@yourgithub](https://github.com) |
-| **Lee See Chen** | Backend Architect | [@theirgithub](https://github.com) |
+| **Lee See Chen** | Backend Architect | [@SeeChen Lee](https://github.com/SeeChen) |
 | **Yong Zhi** | Backend Engineer | [@theirgithub](https://github.com) |
 | **Yee Siang** | AI Engineer | [@theirgithub](https://github.com) |
 
