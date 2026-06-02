@@ -12,6 +12,7 @@ Conventions (Backend-Coding-Standards §7.1):
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from enum import Enum
 from typing import Any, Literal
 
@@ -21,6 +22,10 @@ from pydantic.alias_generators import to_camel
 from app.core.money import Money, MoneyAmount
 
 OBJECT_ID = re.compile(r"^[a-f\d]{24}$", re.I)
+UUID_V4 = re.compile(
+    r"^[a-f\d]{8}-[a-f\d]{4}-[1-5][a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$",
+    re.I,
+)
 
 
 class CamelModel(BaseModel):
@@ -38,7 +43,7 @@ class StrictInput(BaseModel):
 
 
 def _validate_object_id(value: str | None) -> str | None:
-    if value is not None and not OBJECT_ID.match(value):
+    if value is not None and not (OBJECT_ID.match(value) or UUID_V4.match(value)):
         raise ValueError("invalid ObjectId")
     return value
 
@@ -50,10 +55,18 @@ class OperationType(str, Enum):
     """Values accepted in the ``X-Operation-Type`` header."""
 
     HEALTH_PING = "HEALTH_PING"
+    USER_REGISTER = "USER_REGISTER"
+    USER_LOGIN = "USER_LOGIN"
     JOURNEY_START = "JOURNEY_START"
     JOURNEY_NEXT_DAY = "JOURNEY_NEXT_DAY"
+    JOURNEY_LIST = "JOURNEY_LIST"
+    JOURNEY_GET = "JOURNEY_GET"
     BUDGET_CHECK = "BUDGET_CHECK"
     GEO_REACHABLE = "GEO_REACHABLE"
+    CHAT_SEND = "CHAT_SEND"
+    WAYPOINT_ADD = "WAYPOINT_ADD"
+    WAYPOINT_REMOVE = "WAYPOINT_REMOVE"
+    WAYPOINT_SUGGEST = "WAYPOINT_SUGGEST"
 
 
 class GatewayResponse(BaseModel):
@@ -180,8 +193,25 @@ class JourneyState(CamelModel):
     travel_style: str | None = None
     interests: list[str] = Field(default_factory=list)
     current_location: GeoPoint | None = None
+    start_location: GeoPoint | None = None  # 新增: 起始位置
+    start_location_name: str | None = None  # 新增: 起始位置名称
     visited_tags: list[str] = Field(default_factory=list)
+    waypoints: list["Waypoint"] = Field(default_factory=list)  # 新增: 途经景点
     status: JourneyStatus = "ready"
+
+
+# --- Waypoints (途经景点) ---------------------------------------------------
+
+
+WaypointType = Literal["auto", "manual"]
+
+
+class Waypoint(CamelModel):
+    """途经景点模型"""
+    name: str
+    coordinates: GeoPoint
+    type: WaypointType  # auto=系统推荐, manual=用户添加
+    between_days: tuple[int, int] | None = None  # 在哪两天之间 (from_day, to_day)
 
 
 # --- Choices (Data-Models §4) ----------------------------------------------
@@ -286,11 +316,29 @@ class JourneyStartRequest(StrictInput):
     budget_currency: str
     travel_style: str | None = None
     interests: list[str] = Field(default_factory=list)
+    start_location: list[float] | dict | None = Field(
+        None, description="[lng, lat] 或 {name: string} 用于地理编码"
+    )
+    start_location_name: str | None = Field(
+        None, description="起始地点名称"
+    )
 
 
 class JourneyNextDayRequest(StrictInput):
     journey_id: str
     chosen_index: int = Field(ge=0)
+
+    _vj = field_validator("journey_id")(_validate_object_id)
+
+
+class JourneyListRequest(StrictInput):
+    user_id: str
+
+    _vu = field_validator("user_id")(_validate_object_id)
+
+
+class JourneyGetRequest(StrictInput):
+    journey_id: str
 
     _vj = field_validator("journey_id")(_validate_object_id)
 
@@ -302,3 +350,97 @@ class BudgetCheckRequest(StrictInput):
     remaining_days: int = Field(..., ge=1)
     estimated_cost_minor: str = Field(pattern=r"^\d+$")
     currency: str = "MYR"
+
+
+# --- User models ------------------------------------------------------------
+
+
+class UserRegisterRequest(StrictInput):
+    """Request to register a new user."""
+
+    email: str = Field(..., min_length=1, pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")
+    password: str = Field(..., min_length=8)
+    display_name: str | None = Field(None, min_length=1, max_length=100)
+
+
+class UserLoginRequest(StrictInput):
+    """Request to log in an existing user."""
+
+    email: str = Field(..., min_length=1, pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")
+    password: str = Field(..., min_length=8)
+
+
+class User(CamelModel):
+    """Stored user document."""
+
+    user_id: str
+    email: str
+    display_name: str | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# --- Chat models ------------------------------------------------------------
+
+
+class ChatMessage(CamelModel):
+    """A single message in a chat conversation."""
+
+    role: Literal["user", "assistant"]
+    content: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ChatSession(CamelModel):
+    """A chat session with message history."""
+
+    session_id: str
+    journey_id: str | None = None
+    messages: list[ChatMessage] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ChatSendRequest(StrictInput):
+    """Request to send a message to the travel agent."""
+
+    session_id: str | None = None
+    journey_id: str | None = None
+    message: str = Field(min_length=1)
+
+
+class ChatSendResponse(CamelModel):
+    """Response from the travel agent."""
+
+    session_id: str
+    reply: str
+    suggested_actions: list[str] = Field(default_factory=list)
+
+
+# --- Waypoint models (途经景点) ---------------------------------------------
+
+
+class WaypointAddRequest(StrictInput):
+    """添加途经景点请求"""
+    journey_id: str
+    name: str = Field(min_length=1)
+    coordinates: list[float] = Field(..., min_length=2, max_length=2)
+    between_days: tuple[int, int] | None = None
+
+    _vj = field_validator("journey_id")(_validate_object_id)
+
+
+class WaypointRemoveRequest(StrictInput):
+    """删除途经景点请求"""
+    journey_id: str
+    waypoint_index: int = Field(ge=0)
+
+    _vj = field_validator("journey_id")(_validate_object_id)
+
+
+class WaypointSuggestRequest(StrictInput):
+    """获取推荐途经景点请求"""
+    journey_id: str
+    from_day: int = Field(ge=1)
+    to_day: int = Field(ge=2)
+
+    _vj = field_validator("journey_id")(_validate_object_id)

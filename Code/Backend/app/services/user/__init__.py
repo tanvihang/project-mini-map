@@ -1,0 +1,1 @@
+"""User service: registration and authentication."""

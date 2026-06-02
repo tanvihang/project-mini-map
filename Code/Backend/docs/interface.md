@@ -34,6 +34,7 @@ stamped on every log line across all per-service log folders, so
 | `X-Operation-Type` | Internal RPC method | Request body (camelCase) | Success `data` |
 | --- | --- | --- | --- |
 | `HEALTH_PING`      | `system.ping`       | `{}` | `{ pong, env, methods[] }` |
+| `USER_REGISTER`    | `user.register`     | `{ email, password, displayName? }` | `{ isSuccess, userId, email, displayName, createdAt }` |
 | `JOURNEY_START`    | `journey.start`     | `{ userId, destination, totalDays, totalBudgetMinor, budgetCurrency, travelStyle, interests[] }` | `{ isSuccess, journeyId, state, day }` |
 | `JOURNEY_NEXT_DAY` | `journey.next_day`  | `{ journeyId, chosenIndex }` | `{ isSuccess, journeyId, chosenIndex, day }` |
 | `BUDGET_CHECK`     | `budget.check`      | `{ remainingBudgetMinor, remainingDays, estimatedCostMinor, currency }` | `{ isSuccess, approved, thresholdMinor, ... }` |
