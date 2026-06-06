@@ -15,6 +15,10 @@ COPY app ./app
 
 # Run as non-root.
 RUN useradd --create-home --uid 1000 appuser
+
+# Create writable log directory for the non-root user.
+RUN mkdir -p /app/logs && chown appuser:appuser /app/logs
+
 USER appuser
 
 # Cloud Run injects $PORT (defaults to 8080). uvicorn serves the async app.
