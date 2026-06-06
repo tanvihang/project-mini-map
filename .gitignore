@@ -1,2 +1,7 @@
 .claude
 .env
+.DS_Store
+
+# Cloud Build config (contains project IDs)
+cloudbuild.yaml
+Code/Backend/cloudbuild.yaml
