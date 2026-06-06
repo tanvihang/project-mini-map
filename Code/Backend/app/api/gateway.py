@@ -27,10 +27,18 @@ router = APIRouter()
 # The ONLY routing table: Operation-Type -> internal RPC method name.
 OPERATION_ROUTES: dict[OperationType, str] = {
     OperationType.HEALTH_PING: "system.ping",
+    OperationType.USER_REGISTER: "user.register",
+    OperationType.USER_LOGIN: "user.login",
     OperationType.JOURNEY_START: "journey.start",
     OperationType.JOURNEY_NEXT_DAY: "journey.next_day",
+    OperationType.JOURNEY_LIST: "journey.list",
+    OperationType.JOURNEY_GET: "journey.get",
     OperationType.BUDGET_CHECK: "budget.check",
     OperationType.GEO_REACHABLE: "geo.reachable",
+    OperationType.CHAT_SEND: "chat.send",
+    OperationType.WAYPOINT_ADD: "waypoint.add",
+    OperationType.WAYPOINT_REMOVE: "waypoint.remove",
+    OperationType.WAYPOINT_SUGGEST: "waypoint.suggest",
 }
 
 

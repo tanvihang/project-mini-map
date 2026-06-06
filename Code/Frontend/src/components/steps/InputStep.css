@@ -1,0 +1,262 @@
+.input-step {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.input-section {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.input-section--notice {
+  background: linear-gradient(140deg, #fff4e6 0%, #fffaf3 100%);
+}
+
+.input-section__header {
+  margin-bottom: 20px;
+}
+
+.input-section__header h2 {
+  font-size: 1.4rem;
+  margin-bottom: 4px;
+}
+
+.input-section__header p {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Form styles */
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.form-field--full {
+  grid-column: 1 / -1;
+}
+
+.form-field input,
+.form-field select {
+  border: 1px solid var(--line);
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(208, 104, 59, 0.15);
+}
+
+.form-field input::placeholder {
+  color: var(--muted);
+}
+
+.form-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Budget input */
+.budget-input {
+  display: flex;
+  gap: 8px;
+}
+
+.budget-input input {
+  flex: 1;
+}
+
+.budget-input select {
+  width: 100px;
+  flex-shrink: 0;
+}
+
+/* Start location input */
+.start-location-input {
+  display: flex;
+  gap: 8px;
+}
+
+.start-location-input input {
+  flex: 1;
+}
+
+.start-location-input .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: rgba(208, 104, 59, 0.08);
+  border-color: var(--accent);
+}
+
+.btn--small {
+  padding: 8px 16px;
+  font-size: 0.85rem;
+}
+
+/* Style options */
+.style-options {
+  display: flex;
+  gap: 12px;
+}
+
+.style-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.style-option:hover {
+  border-color: var(--accent);
+  background: rgba(208, 104, 59, 0.04);
+}
+
+.style-option--active {
+  border-color: var(--accent);
+  background: rgba(208, 104, 59, 0.1);
+  box-shadow: 0 4px 12px rgba(208, 104, 59, 0.2);
+}
+
+.style-option__label {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.style-option__desc {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Actions */
+.input-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  background: linear-gradient(135deg, #fffaf3 0%, #f9f3ea 100%);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  padding: 12px 24px;
+  border-radius: 999px;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(208, 104, 59, 0.3);
+}
+
+.btn--primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(208, 104, 59, 0.4);
+}
+
+.btn--secondary {
+  background: var(--accent-2);
+  color: #fff;
+}
+
+.btn--secondary:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn--large {
+  padding: 16px 40px;
+  font-size: 1.1rem;
+}
+
+.btn__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.input-actions__hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .style-options {
+    flex-direction: column;
+  }
+
+  .budget-input {
+    flex-direction: column;
+  }
+
+  .budget-input select {
+    width: 100%;
+  }
+}

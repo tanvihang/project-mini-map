@@ -176,8 +176,6 @@ Each stop in a journey is a single MongoDB document in the `nodes` collection. M
 
 The frontend never touches Atlas directly. It speaks structured JSON to the Python (FastAPI) backend, which orchestrates the Gemini agent; the agent reaches data **only** through the MongoDB MCP Server, which enforces the geographic and budget guards before any document is read or written.
 
-The backend (in [`Code/Backend`](Code/Backend)) is a single-process **modular monolith**: **one** public gateway routes every request by an `X-Operation-Type` header to decoupled logical microservices (`journey` · `budget` · `geo_mcp`) that communicate over an internal async RPC layer. Data access uses the async **Motor** driver. See [`Code/Backend/docs/architecture.md`](Code/Backend/docs/architecture.md) and [`Code/Backend/docs/interface.md`](Code/Backend/docs/interface.md).
-
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                 User (Next.js Web App)                  │
@@ -241,19 +239,15 @@ The backend (in [`Code/Backend`](Code/Backend)) is a single-process **modular mo
 
 ## Documentation
 
-Product and engineering specs live on the **`docs` branch** (kept out of code branches on purpose), so the links below are pinned to that branch:
-
 | Doc | Purpose |
 | --- | --- |
-| [System Analysis](https://github.com/tanvihang/project-mini-map/blob/docs/docs/product/System-Analysis.md) | Requirements, use cases, architecture, data-model overview, API schemas |
-| [MVP Happy Path](https://github.com/tanvihang/project-mini-map/blob/docs/docs/product/Happy-Path.md) | The exact MVP scope — 7-step flow, endpoints, setup checklists |
-| [Data Models](https://github.com/tanvihang/project-mini-map/blob/docs/docs/engineering/Data-Models.md) | Authoritative MongoDB schemas, relationships, indexes |
-| [Backend Coding Standards](https://github.com/tanvihang/project-mini-map/blob/docs/docs/engineering/Backend-Coding-Standards.md) | Money / geo / validation / error rules for all backend code |
-| [MCP Tools](https://github.com/tanvihang/project-mini-map/blob/docs/docs/engineering/MCP-Tools.md) | The five MCP tool contracts the agent calls |
-| [Prompt Engineering](https://github.com/tanvihang/project-mini-map/blob/docs/docs/engineering/Prompt-Engineering.md) | System prompts & scenario templates |
-| [Testing Plan](https://github.com/tanvihang/project-mini-map/blob/docs/docs/engineering/Testing-Plan.md) | Geo / vector / money / contract test strategy |
-
-Backend-internal design docs live with the code: [`Code/Backend/docs/architecture.md`](Code/Backend/docs/architecture.md) · [`Code/Backend/docs/interface.md`](Code/Backend/docs/interface.md).
+| [System Analysis](docs/product/System-Analysis.md) | Requirements, use cases, architecture, data-model overview, API schemas |
+| [MVP Happy Path](docs/product/Happy-Path.md) | The exact MVP scope — 7-step flow, endpoints, setup checklists |
+| [Data Models](docs/engineering/Data-Models.md) | Authoritative MongoDB schemas, relationships, indexes |
+| [Backend Coding Standards](docs/engineering/Backend-Coding-Standards.md) | Money / geo / validation / error rules for all backend code |
+| [MCP Tools](docs/engineering/MCP-Tools.md) | The five MCP tool contracts the agent calls |
+| [Prompt Engineering](docs/engineering/Prompt-Engineering.md) | System prompts & scenario templates |
+| [Testing Plan](docs/engineering/Testing-Plan.md) | Geo / vector / money / contract test strategy |
 
 ---
 
@@ -261,8 +255,9 @@ Backend-internal design docs live with the code: [`Code/Backend/docs/architectur
 
 ### Prerequisites
 
-- **Python 3.11+** with the standard-library `venv` (backend lives in [`Code/Backend`](Code/Backend))
-- MongoDB Atlas account (free tier works), or Docker for a local MongoDB
+- **Python 3.12+** and [uv](https://docs.astral.sh/uv/) (backend)
+- **Node.js 18+** (Next.js frontend)
+- MongoDB Atlas account (free tier works)
 - Google Cloud project with Vertex AI enabled
 - API keys: OpenWeatherMap, Hostelworld, Google Places, Fixer.io (FX)
 
@@ -272,30 +267,24 @@ Backend-internal design docs live with the code: [`Code/Backend/docs/architectur
 git clone https://github.com/tanvihang/project-mini-map.git
 cd project-mini-map
 
-# Backend (Python) — venv + pinned requirements
-cd Code/Backend
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env               # then fill in real values
-```
+# Backend (Python)
+uv sync
 
-> The Next.js frontend is a **separate app on the `frontend` branch** and is not part of this branch — see that branch for its setup.
+# Frontend (Next.js) — separate app
+cd frontend && yarn install
+```
 
 ### Environment Variables
 
-`Code/Backend/.env.example` is the source of truth; the key ones:
-
 ```env
-# Google Cloud / Vertex AI
-GOOGLE_GENAI_USE_VERTEXAI=TRUE
+# Google Cloud
 GOOGLE_CLOUD_PROJECT=your-project-id
-GOOGLE_CLOUD_LOCATION=us-central1
-GOOGLE_APPLICATION_CREDENTIALS=         # blank = use ADC (gcloud auth application-default login)
-GEMINI_MODEL=gemini-2.5-flash           # alias; do not pin a build version
+GOOGLE_APPLICATION_CREDENTIALS=./service-account.json
+VERTEX_AI_LOCATION=us-central1
+AGENT_BUILDER_AGENT_ID=your-agent-id
 
-# MongoDB (Atlas, or local Docker: mongodb://localhost:27017)
-MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net
+# MongoDB Atlas
+MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/minimap
 MONGODB_DB=minimap
 VOYAGE_API_KEY=your-voyage-key          # issued from the Atlas dashboard
 
@@ -303,32 +292,22 @@ VOYAGE_API_KEY=your-voyage-key          # issued from the Atlas dashboard
 OPENWEATHER_API_KEY=your-key
 GOOGLE_PLACES_API_KEY=your-key
 FX_API_KEY=your-key                     # Fixer.io — drives MultiCurrency conversion
-
-# Gateway (optional shared secret; blank disables the check in dev)
-GATEWAY_API_KEY=
 ```
 
 ### Run
 
 ```bash
-# From Code/Backend, with the venv activated:
+# Backend — MongoDB MCP server (registered as a tool in Agent Builder)
+uv run python -m app.mcp
 
-# Backend — FastAPI: the single public gateway (POST /api/gateway)
-uvicorn app.main:app --reload --port 8080
+# Backend — FastAPI API
+uv run uvicorn app.main:app --reload
 
-# Backend — geo MCP server for the ADK agent (separate process, optional)
-python -m app.services.geo_mcp.server
-
-# (optional) local MongoDB via Docker
-docker compose up -d
+# Frontend — Next.js web app
+cd frontend && yarn dev
 ```
 
-Smoke-test the gateway:
-
-```bash
-curl -s -X POST http://localhost:8080/api/gateway \
-  -H "X-Operation-Type: HEALTH_PING" -d '{}'
-```
+Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
@@ -351,7 +330,7 @@ More specifically:
 | Name | Role | GitHub |
 |---|---|---|
 | **Angus Tan** | Frontend Engineer | [@yourgithub](https://github.com) |
-| **Lee See Chen** | Backend Architect | [@SeeChen Lee](https://github.com/SeeChen) |
+| **Lee See Chen** | Backend Architect | [@theirgithub](https://github.com) |
 | **Yong Zhi** | Backend Engineer | [@theirgithub](https://github.com) |
 | **Yee Siang** | AI Engineer | [@theirgithub](https://github.com) |
 

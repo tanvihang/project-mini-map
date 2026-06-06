@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.gateway import router as gateway_router
@@ -28,8 +29,11 @@ from app.core.logging_config import (
 )
 from app.core.rpc import rpc
 from app.services.budget import service as budget_service
+from app.services.chat import service as chat_service
 from app.services.geo_mcp import service as geo_service
 from app.services.journey import service as journey_service
+from app.services.user import service as user_service
+from app.services.waypoint import service as waypoint_service
 
 logger = logging.getLogger("minimap.system")
 
@@ -49,6 +53,9 @@ def _register_services() -> None:
     journey_service.register(rpc)
     budget_service.register(rpc)
     geo_service.register(rpc)
+    chat_service.register(rpc)
+    user_service.register_rpc(rpc)
+    waypoint_service.register(rpc)
 
 
 @asynccontextmanager
@@ -68,6 +75,17 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Mini-Map Backend", version="0.1.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.middleware("http")
