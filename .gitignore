@@ -5,3 +5,8 @@
 # Cloud Build config (contains project IDs)
 cloudbuild.yaml
 Code/Backend/cloudbuild.yaml
+
+# Frontend (Vite/React)
+node_modules/
+dist/
+.vite/
