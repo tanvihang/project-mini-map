@@ -1,0 +1,18 @@
+{
+  "appName": "Mini-Map",
+  "tagline": "Every journey is unique. Live yours virtually before you go.",
+  "signIn": "Sign In",
+  "signUp": "Sign Up",
+  "signOut": "Sign Out",
+  "email": "Email",
+  "password": "Password",
+  "confirmPassword": "Confirm Password",
+  "submit": "Submit",
+  "back": "Back",
+  "retry": "Retry",
+  "loading": "Loading...",
+  "error": "Something went wrong",
+  "myJourneys": "My Journeys",
+  "passport": "Passport",
+  "startJourney": "Start a Journey"
+}

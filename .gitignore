@@ -10,3 +10,6 @@ Code/Backend/cloudbuild.yaml
 node_modules/
 dist/
 .vite/
+
+# docs
+docs/

@@ -1,0 +1,29 @@
+{
+  "day": "第",
+  "endOfDay": "第 {{day}} 天结束",
+  "dayTotal": "当天花费",
+  "remainingBudget": "剩余预算",
+  "daysRemaining": "剩余 {{count}} 天",
+  "budgetBreakdown": "明细",
+  "whereTomorrow": "明天去哪里？",
+  "pickOne": "选择一个 ↑",
+  "recommended": "推荐",
+  "tightBudget": "预算紧张",
+  "turnForChoices": "翻页查看选择",
+  "journalComplete": "你的旅行日志已完成",
+  "exportRealPlan": "导出实际计划",
+  "stampPassport": "盖上护照印章",
+  "yourRealPlan": "你的实际计划",
+  "budget": "预算",
+  "category": {
+    "accommodation": "住宿",
+    "food": "餐饮",
+    "transport": "交通",
+    "entry": "门票",
+    "other": "其他"
+  },
+  "creating": "正在创建你的旅程...",
+  "fetchingWeather": "获取天气数据...",
+  "poisCached": "POI 已缓存",
+  "generatingDay": "正在生成第 {{day}} 天..."
+}

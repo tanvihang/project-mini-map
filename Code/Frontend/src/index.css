@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  --font-journal: "Lora", "Noto Serif SC", serif;
+  --font-ui: "Inter", "Noto Sans SC", sans-serif;
+
+  --color-bg-environment: #f8f6f2;
+  --color-bg-glow: rgba(220, 200, 160, 0.15);
+  --color-book-cover: #3d2e1f;
+  --color-book-page: #faf7f0;
+  --color-book-page-edge: #e8e0d3;
+  --color-book-text: #2c2416;
+  --color-book-text-muted: #8a7e6e;
+  --color-panel-bg: #f5f2ec;
+  --color-panel-border: #e0d8cc;
+  --color-panel-text: #1a1a1a;
+  --color-input-bg: #fafaf9;
+  --color-input-border: #d4ccc0;
+  --color-input-focus: #b8a88a;
+  --color-btn-primary: #3d2e1f;
+  --color-btn-primary-text: #faf7f0;
+  --color-success: #5a8a6a;
+  --color-error: #c2554d;
+  --color-warning: #c47a3a;
+  --color-accent-move: #5b7fa5;
+  --color-accent-activity: #4a7c59;
+  --color-accent-explore: #c4943a;
+  --color-accent-slow: #c47a5a;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(
+    ellipse at 50% 40%,
+    var(--color-bg-glow) 0%,
+    var(--color-bg-environment) 70%
+  );
+  min-height: 100vh;
+  font-family: var(--font-ui);
+  color: var(--color-panel-text);
+}

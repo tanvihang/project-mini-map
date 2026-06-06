@@ -1,0 +1,10 @@
+{
+  "title": "Passport",
+  "noStamps": "No stamps yet",
+  "noStampsMessage": "Complete a journey to earn your first passport stamp.",
+  "stampsCount": "{{count}} stamp(s)",
+  "destination": "Destination",
+  "completedAt": "Completed",
+  "totalDays": "{{count}} days",
+  "totalSpent": "Total spent"
+}

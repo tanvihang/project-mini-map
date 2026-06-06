@@ -1,0 +1,29 @@
+{
+  "day": "Day",
+  "endOfDay": "End of Day {{day}}",
+  "dayTotal": "Day Total",
+  "remainingBudget": "Remaining Budget",
+  "daysRemaining": "{{count}} days remaining",
+  "budgetBreakdown": "Breakdown",
+  "whereTomorrow": "Where to tomorrow?",
+  "pickOne": "pick one ↑",
+  "recommended": "Recommended",
+  "tightBudget": "Tight Budget",
+  "turnForChoices": "turn for choices",
+  "journalComplete": "Your Journal is Complete",
+  "exportRealPlan": "Export Real Plan",
+  "stampPassport": "Stamp My Passport",
+  "yourRealPlan": "Your Real Plan",
+  "budget": "Budget",
+  "category": {
+    "accommodation": "Accommodation",
+    "food": "Food",
+    "transport": "Transport",
+    "entry": "Entry Fees",
+    "other": "Other"
+  },
+  "creating": "Creating your journey...",
+  "fetchingWeather": "Fetching weather...",
+  "poisCached": "POIs cached",
+  "generatingDay": "Generating Day {{day}}..."
+}

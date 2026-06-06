@@ -1,0 +1,10 @@
+{
+  "title": "护照",
+  "noStamps": "还没有印章",
+  "noStampsMessage": "完成一次旅程以获得你的第一个护照印章。",
+  "stampsCount": "{{count}} 枚印章",
+  "destination": "目的地",
+  "completedAt": "完成日期",
+  "totalDays": "{{count}} 天",
+  "totalSpent": "总花费"
+}
