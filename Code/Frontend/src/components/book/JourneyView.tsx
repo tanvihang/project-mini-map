@@ -5,30 +5,38 @@ import {
   PaperclipIcon,
   PaperPlaneIcon,
 } from "@/components/ui";
-import type { JourneyResult } from "@/types/journey";
+import type { JourneyChoice, JourneyDay } from "@/types/journey";
+import { JourneyChoices } from "./JourneyChoices";
+import { JourneyDayCard } from "./JourneyDayCard";
 
 interface JourneyViewProps {
   userMessage: string;
-  isPending: boolean;
+  days: JourneyDay[];
+  choices: JourneyChoice[];
+  isStarting: boolean;
+  isAdvancing: boolean;
   isError: boolean;
   error?: Error | null;
-  result?: JourneyResult;
+  onSelectChoice: (index: number) => void;
   onReset: () => void;
 }
 
 export function JourneyView({
   userMessage,
-  isPending,
+  days,
+  choices,
+  isStarting,
+  isAdvancing,
   isError,
   error,
-  result,
+  onSelectChoice,
   onReset,
 }: JourneyViewProps) {
   const { t } = useTranslation(["journey", "common"]);
 
   return (
     <div className="mx-auto flex h-[calc(100vh-80px)] w-full max-w-7xl gap-4 px-4 py-4">
-      {/* Left — chat with the previous user input */}
+      {/* Left — chat: the user's request, then the current day's choices */}
       <aside className="flex w-full max-w-sm shrink-0 flex-col rounded-2xl border border-panel-border bg-white">
         <div className="flex-1 overflow-y-auto p-5">
           <div className="flex justify-end">
@@ -37,11 +45,30 @@ export function JourneyView({
             </div>
           </div>
 
-          {isPending && (
+          {isStarting && (
             <p className="mt-4 font-ui text-ui-sm text-book-text-muted">
               {t("journey:compose.starting")}
             </p>
           )}
+
+          {isError && (
+            <div className="mt-4 rounded-sm border border-error/30 bg-error/5 p-3">
+              <p className="font-ui text-ui-sm font-semibold text-error">
+                {t("journey:compose.startError")}
+              </p>
+              {error?.message && (
+                <p className="mt-1 font-mono text-ui-sm text-book-text-muted">
+                  {error.message}
+                </p>
+              )}
+            </div>
+          )}
+
+          <JourneyChoices
+            choices={choices}
+            isAdvancing={isAdvancing}
+            onSelect={onSelectChoice}
+          />
         </div>
 
         {/* No-op composer — kept for visual continuity */}
@@ -64,7 +91,7 @@ export function JourneyView({
         </div>
       </aside>
 
-      {/* Right — raw journey response */}
+      {/* Right — the journey, one day card per generated day */}
       <section className="flex min-w-0 flex-1 flex-col rounded-2xl border border-panel-border bg-white">
         <header className="flex items-center gap-3 border-b border-panel-border px-5 py-4">
           <button
@@ -86,10 +113,16 @@ export function JourneyView({
         </header>
 
         <div className="min-h-0 flex-1 overflow-auto p-5">
-          {isPending ? (
+          {isStarting ? (
             <p className="font-ui text-ui text-book-text-muted">
               {t("journey:compose.starting")}
             </p>
+          ) : days.length > 0 ? (
+            <div className="flex flex-col gap-4">
+              {days.map((day) => (
+                <JourneyDayCard key={day.dayNumber} day={day} />
+              ))}
+            </div>
           ) : isError ? (
             <div className="rounded-sm border border-error/30 bg-error/5 p-4">
               <p className="font-ui text-ui font-semibold text-error">
@@ -101,10 +134,6 @@ export function JourneyView({
                 </p>
               )}
             </div>
-          ) : result ? (
-            <pre className="whitespace-pre-wrap break-words font-mono text-ui-sm leading-relaxed text-book-text">
-              {JSON.stringify(result, null, 2)}
-            </pre>
           ) : null}
         </div>
       </section>

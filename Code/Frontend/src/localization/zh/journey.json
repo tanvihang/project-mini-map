@@ -49,9 +49,42 @@
     "suggestEscape": "规划临时出游"
   },
   "active": {
-    "responseTitle": "旅程响应",
-    "responseHint": "JOURNEY_START 原始响应",
+    "responseTitle": "你的旅程",
+    "responseHint": "随着行程逐日展开",
     "newTrip": "新行程",
     "you": "你"
+  },
+  "dayCard": {
+    "dayLabel": "第 {{day}} 天",
+    "story": "故事",
+    "senses": "感官",
+    "see": "看",
+    "hear": "听",
+    "smell": "闻",
+    "taste": "尝",
+    "touch": "触",
+    "mood": "心情",
+    "dialogues": "对话",
+    "culture": "文化",
+    "tips": "贴士",
+    "localPhrase": "当地用语",
+    "practical": "实用信息",
+    "openingHours": "营业时间",
+    "crowdLevel": "人流情况",
+    "bestTimeToVisit": "最佳游览时间",
+    "photoTip": "拍摄建议",
+    "weather": "天气",
+    "price": "花费"
+  },
+  "choices": {
+    "prompt": "接下来想做什么？",
+    "advancing": "正在规划你的下一天...",
+    "estCost": "预计花费",
+    "type": {
+      "move": "前往",
+      "activity": "活动",
+      "explore": "探索",
+      "slow": "慢享"
+    }
   }
 }

@@ -2,24 +2,30 @@ import { api } from "@/api/client";
 import { OPERATION_TYPES } from "@/constants/api";
 import type {
   JourneyListResult,
+  JourneyNextDayResult,
   JourneyResult,
   JourneyStartPayload,
+  JourneyStartResult,
 } from "@/types/journey";
 
-// NOTE: JOURNEY_START / JOURNEY_NEXT_DAY response shapes are best-effort —
-// assumed consistent with the verified JOURNEY_GET envelope. Confirm against
-// the live responses (both are mutating, so they were not smoke-tested here).
+// JOURNEY_START returns the new journey `state` plus the first `day` (which
+// carries the next-step `choices`), verified against the live gateway.
 export function startJourney(
   payload: JourneyStartPayload,
-): Promise<JourneyResult> {
-  return api.gateway<JourneyResult>(OPERATION_TYPES.JOURNEY_START, payload);
+): Promise<JourneyStartResult> {
+  return api.gateway<JourneyStartResult>(
+    OPERATION_TYPES.JOURNEY_START,
+    payload,
+  );
 }
 
+// JOURNEY_NEXT_DAY advances the journey by the chosen option index and returns
+// the newly generated `day` (with its own fresh `choices`).
 export function nextDay(
   journeyId: string,
   chosenIndex: number,
-): Promise<JourneyResult> {
-  return api.gateway<JourneyResult>(OPERATION_TYPES.JOURNEY_NEXT_DAY, {
+): Promise<JourneyNextDayResult> {
+  return api.gateway<JourneyNextDayResult>(OPERATION_TYPES.JOURNEY_NEXT_DAY, {
     journeyId,
     chosenIndex,
   });

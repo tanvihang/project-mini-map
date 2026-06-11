@@ -49,9 +49,42 @@
     "suggestEscape": "Plan a last-minute escape"
   },
   "active": {
-    "responseTitle": "Journey response",
-    "responseHint": "Raw JOURNEY_START response",
+    "responseTitle": "Your journey",
+    "responseHint": "Day by day, as it unfolds",
     "newTrip": "New trip",
     "you": "You"
+  },
+  "dayCard": {
+    "dayLabel": "Day {{day}}",
+    "story": "Story",
+    "senses": "Senses",
+    "see": "See",
+    "hear": "Hear",
+    "smell": "Smell",
+    "taste": "Taste",
+    "touch": "Touch",
+    "mood": "Mood",
+    "dialogues": "Dialogues",
+    "culture": "Culture",
+    "tips": "Tips",
+    "localPhrase": "Local phrase",
+    "practical": "Practical",
+    "openingHours": "Opening hours",
+    "crowdLevel": "Crowd level",
+    "bestTimeToVisit": "Best time to visit",
+    "photoTip": "Photo tip",
+    "weather": "Weather",
+    "price": "Price"
+  },
+  "choices": {
+    "prompt": "What would you like to do next?",
+    "advancing": "Planning your next day...",
+    "estCost": "Est. cost",
+    "type": {
+      "move": "Move on",
+      "activity": "Activity",
+      "explore": "Explore",
+      "slow": "Slow down"
+    }
   }
 }

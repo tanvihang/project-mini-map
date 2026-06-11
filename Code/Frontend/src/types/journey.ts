@@ -1,5 +1,5 @@
-import type { JourneyStatus } from "@/constants/journey";
-import type { Waypoint } from "./waypoint";
+import type { ChoiceType, JourneyStatus } from "@/constants/journey";
+import type { Waypoint, WaypointSuggestion } from "./waypoint";
 
 // --- Request payloads -------------------------------------------------------
 
@@ -13,6 +13,26 @@ export interface JourneyStartPayload {
   budgetCurrency: string;
   travelStyle: string;
   interests: string[];
+}
+
+// A GeoJSON-style point as returned within a day's choices.
+export interface GeoPoint {
+  type: "Point";
+  coordinates: [number, number];
+}
+
+// One selectable next-step option attached to a day. Picking one (by its index
+// in `JourneyDay.choices`) drives the JOURNEY_NEXT_DAY operation.
+export interface JourneyChoice {
+  type: ChoiceType;
+  destinationName: string;
+  destinationCoordinates: GeoPoint;
+  tags: string[];
+  // Minor currency units as a string (e.g. "13500" = MYR 135.00).
+  estimatedCostMinor: string;
+  currency: string;
+  title: string;
+  description: string;
 }
 
 // --- Response shapes (verified against the live gateway) --------------------
@@ -61,6 +81,19 @@ export interface JourneyDay {
     tips: string[];
     localPhrase: { phrase: string; pronunciation: string; meaning: string };
   };
+  practical: {
+    openingHours: string;
+    crowdLevel: string;
+    bestTimeToVisit: string;
+    photoTip: string;
+  };
+  weather: { condition: string; tempC: number };
+  // Minor currency units as a string (e.g. "13500" = MYR 135.00).
+  price: { currency: string; minor: string };
+  // The next-step options offered at the end of this day.
+  choices: JourneyChoice[];
+  // True when the backend returned a placeholder day (generation pending).
+  stub: boolean;
 }
 
 // Full journey detail returned by JOURNEY_GET (and JOURNEY_START).
@@ -94,4 +127,44 @@ export interface JourneyResult {
 export interface JourneyListResult {
   isSuccess: boolean;
   journeys: JourneySummary[];
+}
+
+// The mutable journey state echoed by JOURNEY_START / JOURNEY_NEXT_DAY. Mirrors
+// `Journey` but carries `currentDay` + the most recent `lastChoices` instead of
+// the accumulated `days` array.
+export interface JourneyState {
+  journeyId: string;
+  userId: string;
+  destination: string;
+  totalDays: number;
+  currentDay: number;
+  budgetCurrency: string;
+  totalBudgetMinor: number;
+  remainingBudgetMinor: number;
+  currentLocation: [number, number] | null;
+  startLocation: [number, number] | null;
+  startLocationName: string | null;
+  travelStyle: string;
+  interests: string[];
+  visitedTags: string[];
+  waypoints: Waypoint[];
+  lastChoices: JourneyChoice[];
+}
+
+// `data` envelope for JOURNEY_START — the freshly created state plus day one.
+export interface JourneyStartResult {
+  isSuccess: boolean;
+  journeyId: string;
+  state: JourneyState;
+  day: JourneyDay;
+  suggestedWaypoints: WaypointSuggestion[];
+}
+
+// `data` envelope for JOURNEY_NEXT_DAY — echoes the chosen index and returns the
+// newly generated day.
+export interface JourneyNextDayResult {
+  isSuccess: boolean;
+  journeyId: string;
+  chosenIndex: number;
+  day: JourneyDay;
 }

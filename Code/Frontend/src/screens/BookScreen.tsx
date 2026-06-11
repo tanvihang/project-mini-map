@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { authFacade } from "@/store/auth/facade";
-import { useStartJourney } from "@/hooks/useJourney";
+import { useJourneySession } from "@/hooks/useJourney";
 import { ComposeView, JourneyView } from "@/components/book";
 import type { JourneyStartPayload } from "@/types/journey";
 
 export function BookScreen() {
   const user = authFacade.user();
-  const startJourney = useStartJourney();
+  const session = useJourneySession();
 
   // Non-null once the user sends — this is what flips the screen from the
   // compose state to the active (journey) state.
@@ -14,12 +14,12 @@ export function BookScreen() {
 
   const handleStart = (payload: JourneyStartPayload, message: string) => {
     setUserMessage(message);
-    startJourney.mutate(payload);
+    session.start(payload);
   };
 
   const handleReset = () => {
     setUserMessage(null);
-    startJourney.reset();
+    session.reset();
   };
 
   if (userMessage === null) {
@@ -27,7 +27,7 @@ export function BookScreen() {
       <ComposeView
         userId={user?.userId ?? ""}
         displayName={user?.displayName}
-        isStarting={startJourney.isPending}
+        isStarting={session.isStarting}
         onStart={handleStart}
       />
     );
@@ -36,10 +36,13 @@ export function BookScreen() {
   return (
     <JourneyView
       userMessage={userMessage}
-      isPending={startJourney.isPending}
-      isError={startJourney.isError}
-      error={startJourney.error}
-      result={startJourney.data}
+      days={session.days}
+      choices={session.choices}
+      isStarting={session.isStarting}
+      isAdvancing={session.isAdvancing}
+      isError={session.isError}
+      error={session.error}
+      onSelectChoice={session.selectChoice}
       onReset={handleReset}
     />
   );
