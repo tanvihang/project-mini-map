@@ -168,10 +168,10 @@ export function JourneyView({
               placeholder={t("journey:compose.placeholder")}
               className="w-full bg-transparent px-2 font-ui text-ui text-book-text outline-none placeholder:text-book-text-muted/70"
             />
-            <div className="mt-2 flex items-center justify-between">
-              <PaperclipIcon className="h-5 w-5 text-book-text-muted" />
+            <div className="mt-2 flex items-center justify-end gap-3">
+              {/* <PaperclipIcon className="h-5 w-5 text-book-text-muted" /> */}
               <div className="flex items-center gap-2">
-                <MicrophoneIcon className="h-5 w-5 text-book-text-muted" />
+                {/* <MicrophoneIcon className="h-5 w-5 text-book-text-muted" /> */}
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-book-text">
                   <PaperPlaneIcon className="h-4 w-4" />
                 </span>
