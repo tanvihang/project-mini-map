@@ -1,10 +1,20 @@
-export const API_ENDPOINTS = {
-  JOURNEYS: "/api/journeys",
-  journey: (id: string) => `/api/journeys/${id}`,
-  journeyDay: (id: string, dayNum: number) =>
-    `/api/journeys/${id}/day/${dayNum}`,
-  journeyChoices: (id: string) => `/api/journeys/${id}/choices`,
-  journeySelect: (id: string) => `/api/journeys/${id}/select`,
-  journeyExport: (id: string) => `/api/journeys/${id}/export`,
-  userPassport: (userId: string) => `/api/users/${userId}/passport`,
+export const API_GATEWAY = "/api/gateway";
+
+export const OPERATION_TYPES = {
+  HEALTH_PING: "HEALTH_PING",
+  USER_REGISTER: "USER_REGISTER",
+  USER_LOGIN: "USER_LOGIN",
+  JOURNEY_START: "JOURNEY_START",
+  JOURNEY_NEXT_DAY: "JOURNEY_NEXT_DAY",
+  JOURNEY_LIST: "JOURNEY_LIST",
+  JOURNEY_GET: "JOURNEY_GET",
+  BUDGET_CHECK: "BUDGET_CHECK",
+  GEO_REACHABLE: "GEO_REACHABLE",
+  CHAT_SEND: "CHAT_SEND",
+  WAYPOINT_ADD: "WAYPOINT_ADD",
+  WAYPOINT_REMOVE: "WAYPOINT_REMOVE",
+  WAYPOINT_SUGGEST: "WAYPOINT_SUGGEST",
 } as const;
+
+export type OperationType =
+  (typeof OPERATION_TYPES)[keyof typeof OPERATION_TYPES];

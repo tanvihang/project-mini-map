@@ -1,57 +1,43 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as journeyService from "@/services/journey";
+import type { JourneyStartPayload } from "@/types/journey";
 
-export function useCreateJourney() {
+export function useStartJourney() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      sessionId,
-      text,
-    }: {
-      sessionId: string;
-      text: string;
-    }) => journeyService.createJourney(sessionId, text),
+    mutationFn: (payload: JourneyStartPayload) =>
+      journeyService.startJourney(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["journey"] });
     },
   });
 }
 
-export function useDay(journeyId: string, dayNum: number) {
-  return useQuery({
-    queryKey: ["journey", journeyId, "day", dayNum],
-    queryFn: () => journeyService.fetchDay(journeyId, dayNum),
-    enabled: !!journeyId && dayNum > 0,
-  });
-}
-
-export function useFetchChoices(journeyId: string) {
-  return useMutation({
-    mutationFn: (forDay: number) =>
-      journeyService.fetchChoices(journeyId, forDay),
-  });
-}
-
-export function useSelectChoice(journeyId: string) {
+export function useNextDay(journeyId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      forDay,
-      selectedIndex,
-    }: {
-      forDay: number;
-      selectedIndex: number;
-    }) => journeyService.selectChoice(journeyId, forDay, selectedIndex),
+    mutationFn: (chosenIndex: number) =>
+      journeyService.nextDay(journeyId, chosenIndex),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["journey", journeyId] });
     },
   });
 }
 
-export function useExportJourney(journeyId: string) {
-  return useMutation({
-    mutationFn: () => journeyService.exportJourney(journeyId),
+export function useJourneyList(userId: string) {
+  return useQuery({
+    queryKey: ["journey", "list", userId],
+    queryFn: () => journeyService.listJourneys(userId),
+    enabled: !!userId,
+  });
+}
+
+export function useGetJourney(journeyId: string) {
+  return useQuery({
+    queryKey: ["journey", journeyId],
+    queryFn: () => journeyService.getJourney(journeyId),
+    enabled: !!journeyId,
   });
 }

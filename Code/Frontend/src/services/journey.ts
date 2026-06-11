@@ -1,42 +1,36 @@
 import { api } from "@/api/client";
-import { API_ENDPOINTS } from "@/constants/api";
-import type { Journey, DayContent, ChoiceCard, ExportPlan } from "@/types/journey";
+import { OPERATION_TYPES } from "@/constants/api";
+import type {
+  JourneyListResult,
+  JourneyResult,
+  JourneyStartPayload,
+} from "@/types/journey";
 
-export function createJourney(sessionId: string, text: string) {
-  return api.post<{ journey: Journey; status: string }>(
-    API_ENDPOINTS.JOURNEYS,
-    { sessionId, text },
-  );
+// NOTE: JOURNEY_START / JOURNEY_NEXT_DAY response shapes are best-effort —
+// assumed consistent with the verified JOURNEY_GET envelope. Confirm against
+// the live responses (both are mutating, so they were not smoke-tested here).
+export function startJourney(
+  payload: JourneyStartPayload,
+): Promise<JourneyResult> {
+  return api.gateway<JourneyResult>(OPERATION_TYPES.JOURNEY_START, payload);
 }
 
-export function fetchDay(
+export function nextDay(
   journeyId: string,
-  dayNum: number,
-): Promise<DayContent> {
-  return api.get<DayContent>(API_ENDPOINTS.journeyDay(journeyId, dayNum));
-}
-
-export function fetchChoices(
-  journeyId: string,
-  forDay: number,
-): Promise<{ choices: ChoiceCard[] }> {
-  return api.post<{ choices: ChoiceCard[] }>(
-    API_ENDPOINTS.journeyChoices(journeyId),
-    { forDay },
-  );
-}
-
-export function selectChoice(
-  journeyId: string,
-  forDay: number,
-  selectedIndex: number,
-): Promise<DayContent> {
-  return api.post<DayContent>(API_ENDPOINTS.journeySelect(journeyId), {
-    forDay,
-    selectedIndex,
+  chosenIndex: number,
+): Promise<JourneyResult> {
+  return api.gateway<JourneyResult>(OPERATION_TYPES.JOURNEY_NEXT_DAY, {
+    journeyId,
+    chosenIndex,
   });
 }
 
-export function exportJourney(journeyId: string): Promise<ExportPlan> {
-  return api.post<ExportPlan>(API_ENDPOINTS.journeyExport(journeyId));
+export function listJourneys(userId: string): Promise<JourneyListResult> {
+  return api.gateway<JourneyListResult>(OPERATION_TYPES.JOURNEY_LIST, {
+    userId,
+  });
+}
+
+export function getJourney(journeyId: string): Promise<JourneyResult> {
+  return api.gateway<JourneyResult>(OPERATION_TYPES.JOURNEY_GET, { journeyId });
 }
