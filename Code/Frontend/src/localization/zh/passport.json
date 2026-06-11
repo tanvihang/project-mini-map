@@ -32,6 +32,8 @@
     "remainingBudget": "剩余预算",
     "travelStyle": "旅行风格",
     "interests": "兴趣",
-    "noDays": "此行程还没有任何天数。"
+    "noDays": "此行程还没有任何天数。",
+    "tabSummary": "概要",
+    "tabItinerary": "行程"
   }
 }

@@ -1,26 +1,48 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useState } from "react";
+import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useGetJourney } from "@/hooks/useJourney";
-import { ROUTES } from "@/constants/routes";
 import { JourneyDayCard } from "@/components/book";
-import { ChevronLeftIcon } from "@/components/ui";
+import { PanelTabs } from "@/components/ui";
+import { cn } from "@/utils/cn";
 import { formatMinorUnits } from "@/utils/money";
 
 export function TripScreen() {
   const { journeyId = "" } = useParams();
-  const navigate = useNavigate();
   const { t } = useTranslation(["passport", "journey"]);
   const { data, isPending, isError } = useGetJourney(journeyId);
+
+  // On mobile the summary and itinerary can't sit side by side, so the user
+  // toggles between them; the itinerary is the main content, so it leads.
+  // On lg+ both are always visible and this is ignored.
+  const [mobileTab, setMobileTab] = useState<"summary" | "itinerary">(
+    "itinerary",
+  );
 
   const journey = data?.journey;
   const days = journey?.days ?? [];
 
-  const goBack = () => navigate(ROUTES.PASSPORT);
-
   return (
-    <div className="mx-auto flex h-[calc(100vh-80px)] w-full max-w-7xl gap-4 px-4 py-4">
+    <div className="mx-auto flex h-[calc(100vh-80px)] w-full max-w-7xl flex-col gap-3 px-3 py-3 lg:flex-row lg:gap-4 lg:px-4 lg:py-4">
+      {/* Mobile-only switcher between the two panels (both shown on lg+) */}
+      <PanelTabs
+        className="lg:hidden"
+        active={mobileTab}
+        onChange={setMobileTab}
+        tabs={[
+          { value: "summary", label: t("passport:detail.tabSummary") },
+          { value: "itinerary", label: t("passport:detail.tabItinerary") },
+        ]}
+      />
+
       {/* Left — trip summary, mirroring the journey chat panel */}
-      <aside className="flex w-full max-w-sm shrink-0 flex-col rounded-2xl border border-panel-border bg-white">
+      <aside
+        className={cn(
+          "min-h-0 w-full flex-1 flex-col rounded-2xl border border-panel-border bg-white",
+          "lg:max-w-sm lg:flex-none lg:shrink-0 lg:flex",
+          mobileTab === "summary" ? "flex" : "hidden",
+        )}
+      >
         <div className="flex-1 overflow-y-auto p-5">
           {journey && (
             <>
@@ -69,18 +91,16 @@ export function TripScreen() {
       </aside>
 
       {/* Right — the trip, one day card per day (same as the live journey) */}
-      <section className="flex min-w-0 flex-1 flex-col rounded-2xl border border-panel-border bg-white">
+      <section
+        className={cn(
+          "min-h-0 min-w-0 flex-1 flex-col rounded-2xl border border-panel-border bg-white",
+          "lg:flex",
+          mobileTab === "itinerary" ? "flex" : "hidden",
+        )}
+      >
         <header className="flex items-center gap-3 border-b border-panel-border px-5 py-4">
-          <button
-            type="button"
-            onClick={goBack}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-panel-border text-book-text transition hover:bg-panel-bg"
-            aria-label={t("passport:detail.back")}
-          >
-            <ChevronLeftIcon className="h-5 w-5" />
-          </button>
-          <div>
-            <h2 className="font-journal text-title font-semibold text-book-text">
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate font-journal text-title font-semibold text-book-text">
               {journey?.destination ?? t("passport:title")}
             </h2>
             {journey && (

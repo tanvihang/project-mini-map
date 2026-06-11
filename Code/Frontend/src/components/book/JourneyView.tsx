@@ -1,11 +1,12 @@
-import { Fragment, useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { cn } from "@/utils/cn";
 import { formatMinorUnits } from "@/utils/money";
 import {
-  ChevronLeftIcon,
   MicrophoneIcon,
   PaperclipIcon,
   PaperPlaneIcon,
+  PanelTabs,
 } from "@/components/ui";
 import type {
   JourneyChoice,
@@ -28,7 +29,6 @@ interface JourneyViewProps {
   isError: boolean;
   error?: Error | null;
   onSelectChoice: (index: number) => void;
-  onReset: () => void;
 }
 
 export function JourneyView({
@@ -42,9 +42,12 @@ export function JourneyView({
   isError,
   error,
   onSelectChoice,
-  onReset,
 }: JourneyViewProps) {
   const { t } = useTranslation(["journey", "common"]);
+
+  // On mobile the two panels don't fit side by side, so we show one at a time
+  // and let the user toggle. On lg+ both are always visible and this is ignored.
+  const [mobileTab, setMobileTab] = useState<"chat" | "itinerary">("chat");
 
   // Keep the chat scrolled to the newest content as the journey unfolds.
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -65,9 +68,26 @@ export function JourneyView({
   const remainingMinor = (state?.totalBudgetMinor ?? 0) - spentMinor;
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-80px)] w-full max-w-7xl gap-4 px-4 py-4">
+    <div className="mx-auto flex h-[calc(100vh-80px)] w-full max-w-7xl flex-col gap-3 px-3 py-3 lg:flex-row lg:gap-4 lg:px-4 lg:py-4">
+      {/* Mobile-only switcher between the two panels (both shown on lg+) */}
+      <PanelTabs
+        className="lg:hidden"
+        active={mobileTab}
+        onChange={setMobileTab}
+        tabs={[
+          { value: "chat", label: t("journey:active.tabConversation") },
+          { value: "itinerary", label: t("journey:active.tabItinerary") },
+        ]}
+      />
+
       {/* Left — interactive chat: request, day dialogues, picks, choices */}
-      <aside className="flex w-full max-w-sm shrink-0 flex-col rounded-2xl border border-panel-border bg-white">
+      <aside
+        className={cn(
+          "min-h-0 w-full flex-1 flex-col rounded-2xl border border-panel-border bg-white",
+          "lg:max-w-sm lg:flex-none lg:shrink-0 lg:flex",
+          mobileTab === "chat" ? "flex" : "hidden",
+        )}
+      >
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
           {/* The original request */}
           <div className="flex justify-end">
@@ -162,16 +182,14 @@ export function JourneyView({
       </aside>
 
       {/* Right — the journey, one day card per generated day */}
-      <section className="flex min-w-0 flex-1 flex-col rounded-2xl border border-panel-border bg-white">
+      <section
+        className={cn(
+          "min-h-0 min-w-0 flex-1 flex-col rounded-2xl border border-panel-border bg-white",
+          "lg:flex",
+          mobileTab === "itinerary" ? "flex" : "hidden",
+        )}
+      >
         <header className="flex items-center gap-3 border-b border-panel-border px-5 py-4">
-          <button
-            type="button"
-            onClick={onReset}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-panel-border text-book-text transition hover:bg-panel-bg"
-            aria-label={t("journey:active.newTrip")}
-          >
-            <ChevronLeftIcon className="h-5 w-5" />
-          </button>
           <div className="min-w-0 flex-1">
             <h2 className="truncate font-journal text-title font-semibold text-book-text">
               {state?.destination || t("journey:active.responseTitle")}

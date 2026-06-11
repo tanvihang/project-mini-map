@@ -54,7 +54,9 @@
     "dayProgress": "Day {{current}} / {{total}}",
     "youChose": "You chose",
     "newTrip": "New trip",
-    "you": "You"
+    "you": "You",
+    "tabConversation": "Conversation",
+    "tabItinerary": "Itinerary"
   },
   "dayCard": {
     "dayLabel": "Day {{day}}",

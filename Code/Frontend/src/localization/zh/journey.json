@@ -54,7 +54,9 @@
     "dayProgress": "第 {{current}} / {{total}} 天",
     "youChose": "你的选择",
     "newTrip": "新行程",
-    "you": "你"
+    "you": "你",
+    "tabConversation": "对话",
+    "tabItinerary": "行程"
   },
   "dayCard": {
     "dayLabel": "第 {{day}} 天",

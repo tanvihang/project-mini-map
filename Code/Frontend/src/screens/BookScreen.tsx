@@ -17,11 +17,6 @@ export function BookScreen() {
     session.start(payload);
   };
 
-  const handleReset = () => {
-    setUserMessage(null);
-    session.reset();
-  };
-
   if (userMessage === null) {
     return (
       <ComposeView
@@ -45,7 +40,6 @@ export function BookScreen() {
       isError={session.isError}
       error={session.error}
       onSelectChoice={session.selectChoice}
-      onReset={handleReset}
     />
   );
 }

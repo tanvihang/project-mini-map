@@ -32,6 +32,8 @@
     "remainingBudget": "Remaining budget",
     "travelStyle": "Travel style",
     "interests": "Interests",
-    "noDays": "This trip has no days yet."
+    "noDays": "This trip has no days yet.",
+    "tabSummary": "Summary",
+    "tabItinerary": "Itinerary"
   }
 }

@@ -1,6 +1,7 @@
 export { Button } from "./Button";
 export { TextField } from "./TextField";
 export { Checkbox } from "./Checkbox";
+export { PanelTabs } from "./PanelTabs";
 export {
   MapPinIcon,
   EyeIcon,
