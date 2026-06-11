@@ -51,6 +51,8 @@
   "active": {
     "responseTitle": "Your journey",
     "responseHint": "Day by day, as it unfolds",
+    "dayProgress": "Day {{current}} / {{total}}",
+    "youChose": "You chose",
     "newTrip": "New trip",
     "you": "You"
   },

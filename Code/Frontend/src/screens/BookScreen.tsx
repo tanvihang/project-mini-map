@@ -37,7 +37,9 @@ export function BookScreen() {
     <JourneyView
       userMessage={userMessage}
       days={session.days}
+      selectedChoices={session.selectedChoices}
       choices={session.choices}
+      state={session.state}
       isStarting={session.isStarting}
       isAdvancing={session.isAdvancing}
       isError={session.isError}

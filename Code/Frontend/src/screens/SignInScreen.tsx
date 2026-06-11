@@ -132,12 +132,12 @@ export function SignInScreen() {
                     checked={remember}
                     onChange={(e) => setRemember(e.target.checked)}
                   />
-                  <button
+                  {/* <button
                     type="button"
                     className="font-ui text-ui text-book-text-muted transition hover:text-book-text"
                   >
                     {t("auth:forgotPassword")}
-                  </button>
+                  </button> */}
                 </div>
 
                 <Button

@@ -51,6 +51,8 @@
   "active": {
     "responseTitle": "你的旅程",
     "responseHint": "随着行程逐日展开",
+    "dayProgress": "第 {{current}} / {{total}} 天",
+    "youChose": "你的选择",
     "newTrip": "新行程",
     "you": "你"
   },

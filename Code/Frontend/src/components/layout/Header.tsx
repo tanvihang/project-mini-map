@@ -23,14 +23,14 @@ export function Header() {
       <div className="flex items-center gap-3">
         {/* Preferences */}
         <div className="flex items-center overflow-hidden rounded-full border border-panel-border bg-white">
-          <button
+          {/* <button
             type="button"
             title={t("currency")}
             className="px-3 py-2 font-ui text-ui-sm font-medium text-book-text transition hover:bg-panel-bg"
           >
             RM
           </button>
-          <span className="h-5 w-px bg-panel-border" />
+          <span className="h-5 w-px bg-panel-border" /> */}
           <button
             type="button"
             onClick={toggleLanguage}
@@ -40,14 +40,14 @@ export function Header() {
           >
             <span aria-hidden>{isZh ? "🇨🇳" : "🇺🇸"}</span>
           </button>
-          <span className="h-5 w-px bg-panel-border" />
-          <button
+          {/* <span className="h-5 w-px bg-panel-border" /> */}
+          {/* <button
             type="button"
             title={t("temperature")}
             className="px-3 py-2 font-ui text-ui-sm font-medium text-book-text transition hover:bg-panel-bg"
           >
             °C
-          </button>
+          </button> */}
         </div>
 
         <UserMenu />

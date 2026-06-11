@@ -76,7 +76,7 @@ export function UserMenu() {
   ];
   // Navigation targets aren't built yet — these close the menu for now.
   const secondary: { icon: MenuIcon; label: string }[] = [
-    { icon: QuestionCircleIcon, label: t("about") },
+    // { icon: QuestionCircleIcon, label: t("about") },
     // { icon: ChatBubbleIcon, label: t("contact") },
     // { icon: DocumentIcon, label: t("termsOfService") },
   ];
@@ -129,7 +129,7 @@ export function UserMenu() {
               />
             ))}
           </div>
-
+{/* 
           <div className="h-px bg-panel-border" />
 
           <div className="py-1">
@@ -141,7 +141,7 @@ export function UserMenu() {
                 onClick={close}
               />
             ))}
-          </div>
+          </div> */}
 
           <div className="h-px bg-panel-border" />
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as journeyService from "@/services/journey";
 import type {
+  JourneyChoice,
   JourneyDay,
   JourneyStartPayload,
   JourneyState,
@@ -43,6 +44,9 @@ export function useJourneySession() {
 
   const [days, setDays] = useState<JourneyDay[]>([]);
   const [state, setState] = useState<JourneyState | null>(null);
+  // History of options the user picked, in order. `selectedChoices[i]` is the
+  // option chosen on `days[i]` (which produced `days[i + 1]`).
+  const [selectedChoices, setSelectedChoices] = useState<JourneyChoice[]>([]);
 
   const start = (payload: JourneyStartPayload) => {
     startMutation.mutate(payload, {
@@ -50,15 +54,24 @@ export function useJourneySession() {
         setJourneyId(res.journeyId);
         setState(res.state);
         setDays(res.day ? [res.day] : []);
+        setSelectedChoices([]);
       },
     });
   };
 
   const selectChoice = (chosenIndex: number) => {
     if (!journeyId || nextDayMutation.isPending) return;
+    // Record the pick optimistically so it shows in the chat history right
+    // away; roll it back if the request fails.
+    const chosen = days[days.length - 1]?.choices?.[chosenIndex];
+    if (chosen) setSelectedChoices((prev) => [...prev, chosen]);
+
     nextDayMutation.mutate(chosenIndex, {
       onSuccess: (res) => {
         if (res.day) setDays((prev) => [...prev, res.day]);
+      },
+      onError: () => {
+        if (chosen) setSelectedChoices((prev) => prev.slice(0, -1));
       },
     });
   };
@@ -67,6 +80,7 @@ export function useJourneySession() {
     setJourneyId(null);
     setDays([]);
     setState(null);
+    setSelectedChoices([]);
     startMutation.reset();
     nextDayMutation.reset();
   };
@@ -77,6 +91,7 @@ export function useJourneySession() {
     journeyId,
     state,
     days,
+    selectedChoices,
     // Next-step options come from the most recently generated day.
     choices: lastDay?.choices ?? [],
     start,
