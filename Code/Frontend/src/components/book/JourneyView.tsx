@@ -32,7 +32,7 @@ export function JourneyView({
       <aside className="flex w-full max-w-sm shrink-0 flex-col rounded-2xl border border-panel-border bg-white">
         <div className="flex-1 overflow-y-auto p-5">
           <div className="flex justify-end">
-            <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-[#e3d9fb] px-4 py-3 font-ui text-ui text-book-text">
+            <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-primary px-4 py-3 font-ui text-ui text-book-text">
               {userMessage}
             </div>
           </div>
@@ -55,7 +55,7 @@ export function JourneyView({
               <PaperclipIcon className="h-5 w-5 text-book-text-muted" />
               <div className="flex items-center gap-2">
                 <MicrophoneIcon className="h-5 w-5 text-book-text-muted" />
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#cdbcf7] text-book-text">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-book-text">
                   <PaperPlaneIcon className="h-4 w-4" />
                 </span>
               </div>

@@ -28,6 +28,11 @@
   --color-book-text: #2c2416;
   --color-book-text-muted: #8a7e6e;
 
+  /* Primary */
+  --color-primary: #bfddf7;
+  --color-primary-hover: #c4e1f7;
+  --color-primary-active: #b8d4f0;
+
   /* Panels (solid, no glass) */
   --color-panel-bg: #f5f2ec;
   --color-panel-border: #e0d8cc;
@@ -37,7 +42,7 @@
   --color-input-bg: #fafaf9;
   --color-input-border: #d4ccc0;
   --color-input-focus: #b8a88a;
-  --color-btn-primary: #3d2e1f;
+  --color-btn-primary: #b8d4f0;
   --color-btn-primary-text: #faf7f0;
 
   /* Feedback */

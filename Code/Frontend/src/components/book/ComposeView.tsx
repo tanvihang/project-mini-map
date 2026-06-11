@@ -149,7 +149,7 @@ export function ComposeView({
                 disabled={!canStart}
                 aria-label={t("journey:compose.send")}
                 aria-busy={isStarting || undefined}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#cdbcf7] text-book-text transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-book-text transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <PaperPlaneIcon className="h-5 w-5" />
               </button>
@@ -275,7 +275,7 @@ function Chip({
       className={cn(
         "rounded-full px-3 py-1.5 font-ui text-ui-sm font-medium shadow-card transition",
         selected
-          ? "bg-[#cdbcf7] text-book-text"
+          ? "bg-primary text-book-text"
           : "bg-white text-book-text hover:bg-panel-bg",
       )}
     >
