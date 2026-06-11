@@ -14,5 +14,16 @@
   "error": "出了点问题",
   "myJourneys": "我的旅程",
   "passport": "护照",
-  "startJourney": "开始旅程"
+  "startJourney": "开始旅程",
+  "myTripsAndBookings": "我的行程",
+  "manageSubscription": "管理订阅",
+  "myProfile": "我的资料",
+  "settings": "设置",
+  "about": "关于",
+  "contact": "联系我们",
+  "termsOfService": "服务条款",
+  "openUserMenu": "打开用户菜单",
+  "changeLanguage": "切换语言",
+  "currency": "货币",
+  "temperature": "温度"
 }

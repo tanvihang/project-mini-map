@@ -13,7 +13,6 @@ import {
   LockIcon,
   MailIcon,
   MapPinIcon,
-  TagIcon,
   TextField,
   UserIcon,
 } from "@/components/ui";

@@ -11,7 +11,6 @@ import {
   LockIcon,
   MailIcon,
   MapPinIcon,
-  TagIcon,
   TextField,
 } from "@/components/ui";
 import heroImage from "@/assets/images/hero.png";

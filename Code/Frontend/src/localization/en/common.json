@@ -14,5 +14,16 @@
   "error": "Something went wrong",
   "myJourneys": "My Journeys",
   "passport": "Passport",
-  "startJourney": "Start a Journey"
+  "startJourney": "Start a Journey",
+  "myTripsAndBookings": "My Trips",
+  "manageSubscription": "Manage Subscription",
+  "myProfile": "My Profile",
+  "settings": "Settings",
+  "about": "About",
+  "contact": "Contact",
+  "termsOfService": "Terms of service",
+  "openUserMenu": "Open user menu",
+  "changeLanguage": "Change language",
+  "currency": "Currency",
+  "temperature": "Temperature"
 }
