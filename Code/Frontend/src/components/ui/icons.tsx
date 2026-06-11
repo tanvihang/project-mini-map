@@ -36,3 +36,52 @@ export function EyeOffIcon({ className = "h-5 w-5", ...props }: IconProps) {
     </svg>
   );
 }
+
+export function ChevronLeftIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...props}>
+      <path d="M15.75 19.5L8.25 12l7.5-7.5" />
+    </svg>
+  );
+}
+
+export function ChevronRightIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...props}>
+      <path d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+    </svg>
+  );
+}
+
+export function TagIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...props}>
+      <path d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+      <path d="M6 6h.008v.008H6V6z" />
+    </svg>
+  );
+}
+
+export function MailIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...props}>
+      <path d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+    </svg>
+  );
+}
+
+export function UserIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...props}>
+      <path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+    </svg>
+  );
+}
+
+export function LockIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...props}>
+      <path d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 0h10.5a2.25 2.25 0 012.25 2.25v6.75a2.25 2.25 0 01-2.25 2.25H6.75a2.25 2.25 0 01-2.25-2.25v-6.75a2.25 2.25 0 012.25-2.25z" />
+    </svg>
+  );
+}

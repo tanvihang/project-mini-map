@@ -9,12 +9,14 @@ import { cn } from "@/utils/cn";
 interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  /** Element rendered inside the field on the left (e.g. a mail icon). */
+  leading?: ReactNode;
   /** Element rendered inside the field on the right (e.g. a password toggle). */
   trailing?: ReactNode;
 }
 
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
-  ({ label, error, trailing, id, className, ...props }, ref) => {
+  ({ label, error, leading, trailing, id, className, ...props }, ref) => {
     const generatedId = useId();
     const inputId = id ?? generatedId;
 
@@ -29,6 +31,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
           </label>
         )}
         <div className="relative">
+          {leading && (
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-book-text-muted">
+              {leading}
+            </div>
+          )}
           <input
             id={inputId}
             ref={ref}
@@ -36,6 +43,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
             className={cn(
               "w-full rounded-sm border bg-input-bg px-4 py-3 font-ui text-ui text-book-text outline-none transition placeholder:text-book-text-muted/70 focus:ring-2 focus:ring-input-focus/30",
               error ? "border-error focus:border-error" : "border-input-border focus:border-input-focus",
+              leading && "pl-11",
               trailing && "pr-11",
               className,
             )}

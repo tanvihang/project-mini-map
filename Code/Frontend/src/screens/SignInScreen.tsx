@@ -8,7 +8,10 @@ import {
   Checkbox,
   EyeIcon,
   EyeOffIcon,
+  LockIcon,
+  MailIcon,
   MapPinIcon,
+  TagIcon,
   TextField,
 } from "@/components/ui";
 import heroImage from "@/assets/images/hero.png";
@@ -37,115 +40,119 @@ export function SignInScreen() {
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-white">
-      {/* Hero panel */}
-      <div className="relative hidden w-1/2 overflow-hidden lg:block">
-        <img
-          src={heroImage}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-book-text/70 via-book-text/15 to-book-text/25" />
-
-        <div className="absolute left-8 top-8 flex items-center gap-3 text-white">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-book-cover">
-            <MapPinIcon />
-          </span>
-          <span className="font-ui text-ui-lg font-semibold tracking-tight">
-            {t("common:appName")}
-          </span>
+    <div className="flex min-h-screen w-full items-center justify-center px-4 py-8">
+      <div className="relative w-full max-w-6xl overflow-hidden rounded-md bg-white shadow-book">
+        {/* Centered logo notch (large screens, sits over the seam) */}
+        <div className="absolute left-1/2 top-0 z-10 hidden -translate-x-1/2 lg:flex">
+          <div className="flex items-center gap-2 rounded-b-3xl bg-white px-6 py-3 text-book-cover">
+            <MapPinIcon className="h-5 w-5" />
+            <span className="font-ui text-ui-lg font-semibold tracking-tight">
+              {t("common:appName")}
+            </span>
+          </div>
         </div>
 
-        <div className="absolute inset-x-8 bottom-12 text-white">
-          <h2 className="font-journal text-display leading-tight">
-            {t("auth:heroTitle")}
-          </h2>
-          <p className="mt-3 max-w-md font-ui text-small leading-relaxed text-white/80">
-            {t("auth:heroSubtitle")}
-          </p>
-        </div>
-      </div>
-
-      {/* Form panel */}
-      <div className="flex w-full flex-col justify-center px-6 py-12 sm:px-10 lg:w-1/2">
-        <div className="mx-auto w-full max-w-md">
-          <div className="flex justify-end">
-            <Link
-              to={ROUTES.SIGN_IN}
-              className="rounded-full bg-btn-primary px-6 py-2.5 font-ui text-ui font-medium text-btn-primary-text transition hover:opacity-90"
-            >
-              {t("common:signIn")}
-            </Link>
-          </div>
-
-          <div className="mt-10">
-            <h1 className="font-journal text-display text-book-text">
-              {t("auth:welcomeTitle")}
-            </h1>
-            <p className="mt-2 font-ui text-ui text-book-text-muted">
-              {t("auth:welcomeSubtitle")}
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-            <TextField
-              label={t("auth:emailLabel")}
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={t("auth:emailPlaceholder")}
-            />
-
-            <TextField
-              label={t("auth:passwordLabel")}
-              type={showPassword ? "text" : "password"}
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t("auth:passwordPlaceholder")}
-              trailing={
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  className="flex items-center text-book-text-muted transition hover:text-book-text"
-                >
-                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              }
-            />
-
-            <div className="flex items-center justify-between">
-              <Checkbox
-                label={t("auth:rememberMe")}
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
+        <div className="grid lg:grid-cols-2">
+          {/* Hero image (large screens, left side) */}
+          <div className="hidden p-3 lg:block">
+            <div className="relative h-full min-h-136 w-full overflow-hidden rounded-md">
+              <img
+                src={heroImage}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
               />
-              <button
-                type="button"
-                className="font-ui text-ui text-book-text-muted transition hover:text-book-text"
-              >
-                {t("auth:forgotPassword")}
-              </button>
+              <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-book-text/70 via-transparent to-book-text/10" />
             </div>
+          </div>
 
-            <Button type="submit" fullWidth isLoading={isLoading}>
-              {isLoading ? t("common:loading") : t("auth:loginButton")}
-            </Button>
-          </form>
+          {/* Form panel (right side) */}
+          <div className="flex flex-col justify-center px-6 py-12 sm:px-12">
+            <div className="mx-auto w-full max-w-md">
+              {/* Logo (small screens) */}
+              <div className="mb-8 flex items-center gap-2 text-book-cover lg:hidden">
+                <MapPinIcon className="h-5 w-5" />
+                <span className="font-ui text-ui-lg font-semibold tracking-tight">
+                  {t("common:appName")}
+                </span>
+              </div>
 
-          <p className="mt-8 text-center font-ui text-ui text-book-text-muted">
-            {t("auth:noAccount")}{" "}
-            <Link
-              to={ROUTES.SIGN_UP}
-              className="font-semibold text-book-cover hover:underline"
-            >
-              {t("auth:register")}
-            </Link>
-          </p>
+              <h1 className="font-journal text-display leading-tight text-book-text">
+                {t("auth:welcomeTitle")}
+              </h1>
+              <p className="mt-3 font-ui text-small leading-relaxed text-book-text-muted">
+                {t("auth:welcomeSubtitle")}
+              </p>
+
+              <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+                <TextField
+                  label={t("auth:emailLabel")}
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={t("auth:emailPlaceholder")}
+                  leading={<MailIcon className="h-5 w-5" />}
+                />
+
+                <TextField
+                  label={t("auth:passwordLabel")}
+                  type={showPassword ? "text" : "password"}
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={t("auth:passwordPlaceholder")}
+                  leading={<LockIcon className="h-5 w-5" />}
+                  trailing={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={
+                        showPassword ? "Hide password" : "Show password"
+                      }
+                      className="flex items-center text-book-text-muted transition hover:text-book-text"
+                    >
+                      {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                    </button>
+                  }
+                />
+
+                <div className="flex items-center justify-between">
+                  <Checkbox
+                    label={t("auth:rememberMe")}
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                  />
+                  <button
+                    type="button"
+                    className="font-ui text-ui text-book-text-muted transition hover:text-book-text"
+                  >
+                    {t("auth:forgotPassword")}
+                  </button>
+                </div>
+
+                <Button
+                  type="submit"
+                  fullWidth
+                  isLoading={isLoading}
+                  className="mt-2"
+                >
+                  {isLoading ? t("common:loading") : t("auth:loginButton")}
+                </Button>
+              </form>
+
+              <p className="mt-8 text-center font-ui text-ui text-book-text-muted">
+                {t("auth:noAccount")}{" "}
+                <Link
+                  to={ROUTES.SIGN_UP}
+                  className="font-semibold text-book-cover hover:underline"
+                >
+                  {t("auth:register")}
+                </Link>
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
