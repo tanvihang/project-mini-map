@@ -1,0 +1,33 @@
+# Local MongoDB for development. Portable across WSL2, Linux, and macOS:
+#   - uses the official image + a named volume (no host-path bind mounts,
+#     which is what breaks Windows<->WSL and macOS file sharing),
+#   - no obsolete `version:` key (Docker Compose v2),
+#   - exposes the standard port so MONGODB_URI=mongodb://localhost:27017 works.
+#
+# Usage:
+#   docker compose up -d        # start
+#   docker compose down         # stop (data persists in the named volume)
+#   docker compose down -v      # stop and wipe data
+#
+# Production uses MongoDB Atlas — point MONGODB_URI at the cluster instead.
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: minimap-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: minimap
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  mongo_data:
