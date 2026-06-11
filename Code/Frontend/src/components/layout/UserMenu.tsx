@@ -8,7 +8,6 @@ import {
   ChevronDownIcon,
   LogoutIcon,
   MapPinIcon,
-  QuestionCircleIcon,
 } from "@/components/ui";
 
 type MenuIcon = ComponentType<{ className?: string }>;
@@ -58,7 +57,6 @@ export function UserMenu() {
 
   const initials = getInitials(user?.displayName, user?.email);
 
-  const close = () => setOpen(false);
   const go = (to: string) => () => {
     setOpen(false);
     navigate(to);
@@ -73,12 +71,6 @@ export function UserMenu() {
     // { icon: CrownIcon, label: t("manageSubscription"), onClick: close },
     // { icon: UserIcon, label: t("myProfile"), onClick: close },
     // { icon: SettingsIcon, label: t("settings"), onClick: close },
-  ];
-  // Navigation targets aren't built yet — these close the menu for now.
-  const secondary: { icon: MenuIcon; label: string }[] = [
-    // { icon: QuestionCircleIcon, label: t("about") },
-    // { icon: ChatBubbleIcon, label: t("contact") },
-    // { icon: DocumentIcon, label: t("termsOfService") },
   ];
 
   return (
