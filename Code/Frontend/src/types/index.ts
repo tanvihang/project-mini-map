@@ -18,5 +18,5 @@ export type {
   ApiResponse,
   ApiError,
   GatewayResponse,
-  GatewayError,
+  GatewayErrorData,
 } from "./api";

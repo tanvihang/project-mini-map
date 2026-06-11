@@ -34,7 +34,7 @@
 ```
 
 **Elements:**
-- Centered glassmorphic card on dark gradient background
+
 - Mini-Map logo + tagline
 - Email input field
 - Password input field with show/hide toggle

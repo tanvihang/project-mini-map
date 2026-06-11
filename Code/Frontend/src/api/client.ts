@@ -40,8 +40,12 @@ async function gatewayRequest<T>(
     .catch(() => null)) as GatewayResponse<T> | null;
 
   if (!res.ok || !envelope || !envelope.ok || envelope.error) {
+    // On failure the human-readable message lives in `data.errorMessage`;
+    // `error` is an error-code string. Fall back to either, then status.
+    const errorData = envelope?.data as { errorMessage?: string } | undefined;
     const message =
-      envelope?.error?.message ??
+      errorData?.errorMessage ??
+      (typeof envelope?.error === "string" ? envelope.error : undefined) ??
       `Gateway operation ${operation} failed with status ${res.status}`;
     throw new ApiClientError(message, res.status, operation);
   }
