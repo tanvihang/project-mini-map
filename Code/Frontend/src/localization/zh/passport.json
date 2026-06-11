@@ -6,5 +6,32 @@
   "destination": "目的地",
   "completedAt": "完成日期",
   "totalDays": "{{count}} 天",
-  "totalSpent": "总花费"
+  "totalSpent": "总花费",
+  "trips": {
+    "title": "我的行程",
+    "subtitle": "回顾你规划过的每一段旅程。",
+    "loading": "正在加载你的行程...",
+    "loadError": "无法加载你的行程，请重试。",
+    "empty": "还没有行程",
+    "emptyMessage": "从书中开启一段旅程，它就会出现在这里。",
+    "dayProgress": "第 {{current}} / {{total}} 天"
+  },
+  "status": {
+    "idle": "草稿",
+    "ready": "就绪",
+    "generating": "生成中",
+    "active": "进行中",
+    "completed": "已完成",
+    "exported": "已导出"
+  },
+  "detail": {
+    "summary": "{{destination}} {{days}} 天之旅",
+    "loading": "正在加载行程...",
+    "loadError": "无法加载此行程。",
+    "back": "返回行程列表",
+    "remainingBudget": "剩余预算",
+    "travelStyle": "旅行风格",
+    "interests": "兴趣",
+    "noDays": "此行程还没有任何天数。"
+  }
 }

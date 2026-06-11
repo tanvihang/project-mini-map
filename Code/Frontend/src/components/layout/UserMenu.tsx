@@ -5,15 +5,10 @@ import { ROUTES } from "@/constants/routes";
 import { authFacade } from "@/store/auth/facade";
 import { cn } from "@/utils/cn";
 import {
-  ChatBubbleIcon,
   ChevronDownIcon,
-  CrownIcon,
-  DocumentIcon,
   LogoutIcon,
   MapPinIcon,
   QuestionCircleIcon,
-  SettingsIcon,
-  UserIcon,
 } from "@/components/ui";
 
 type MenuIcon = ComponentType<{ className?: string }>;
@@ -63,14 +58,23 @@ export function UserMenu() {
 
   const initials = getInitials(user?.displayName, user?.email);
 
-  // Navigation targets aren't built yet — these close the menu for now.
   const close = () => setOpen(false);
-  const primary: { icon: MenuIcon; label: string }[] = [
-    { icon: MapPinIcon, label: t("myTripsAndBookings") },
-    // { icon: CrownIcon, label: t("manageSubscription") },
-    // { icon: UserIcon, label: t("myProfile") },
-    // { icon: SettingsIcon, label: t("settings") },
+  const go = (to: string) => () => {
+    setOpen(false);
+    navigate(to);
+  };
+
+  const primary: { icon: MenuIcon; label: string; onClick: () => void }[] = [
+    {
+      icon: MapPinIcon,
+      label: t("myTripsAndBookings"),
+      onClick: go(ROUTES.PASSPORT),
+    },
+    // { icon: CrownIcon, label: t("manageSubscription"), onClick: close },
+    // { icon: UserIcon, label: t("myProfile"), onClick: close },
+    // { icon: SettingsIcon, label: t("settings"), onClick: close },
   ];
+  // Navigation targets aren't built yet — these close the menu for now.
   const secondary: { icon: MenuIcon; label: string }[] = [
     { icon: QuestionCircleIcon, label: t("about") },
     // { icon: ChatBubbleIcon, label: t("contact") },
@@ -121,7 +125,7 @@ export function UserMenu() {
                 key={item.label}
                 icon={item.icon}
                 label={item.label}
-                onClick={close}
+                onClick={item.onClick}
               />
             ))}
           </div>

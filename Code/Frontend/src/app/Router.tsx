@@ -9,6 +9,7 @@ import { BookScreen } from "@/screens/BookScreen";
 import { SignInScreen } from "@/screens/SignInScreen";
 import { SignUpScreen } from "@/screens/SignUpScreen";
 import { PassportScreen } from "@/screens/PassportScreen";
+import { TripScreen } from "@/screens/TripScreen";
 import { AuthGuard } from "./AuthGuard";
 
 const router = createBrowserRouter([
@@ -34,6 +35,10 @@ const router = createBrowserRouter([
       {
         path: ROUTES.PASSPORT,
         element: <PassportScreen />,
+      },
+      {
+        path: ROUTES.TRIP,
+        element: <TripScreen />,
       },
     ],
   },

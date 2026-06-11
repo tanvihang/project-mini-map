@@ -6,5 +6,32 @@
   "destination": "Destination",
   "completedAt": "Completed",
   "totalDays": "{{count}} days",
-  "totalSpent": "Total spent"
+  "totalSpent": "Total spent",
+  "trips": {
+    "title": "My Trips",
+    "subtitle": "Revisit any journey you've planned.",
+    "loading": "Loading your trips...",
+    "loadError": "We couldn't load your trips. Please try again.",
+    "empty": "No trips yet",
+    "emptyMessage": "Start a journey from the book to see it here.",
+    "dayProgress": "Day {{current}} of {{total}}"
+  },
+  "status": {
+    "idle": "Draft",
+    "ready": "Ready",
+    "generating": "Generating",
+    "active": "In progress",
+    "completed": "Completed",
+    "exported": "Exported"
+  },
+  "detail": {
+    "summary": "{{days}}-day trip to {{destination}}",
+    "loading": "Loading trip...",
+    "loadError": "We couldn't load this trip.",
+    "back": "Back to trips",
+    "remainingBudget": "Remaining budget",
+    "travelStyle": "Travel style",
+    "interests": "Interests",
+    "noDays": "This trip has no days yet."
+  }
 }

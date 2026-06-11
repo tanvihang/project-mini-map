@@ -1,13 +1,7 @@
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/utils/cn";
-import {
-  ArrowDownIcon,
-  MapPinIcon,
-  MicrophoneIcon,
-  PaperclipIcon,
-  PaperPlaneIcon,
-} from "@/components/ui";
+import { MapPinIcon, PaperPlaneIcon } from "@/components/ui";
 import type { JourneyStartPayload } from "@/types/journey";
 import heroVideo from "@/assets/video/travel.mp4";
 
