@@ -55,7 +55,7 @@ function HeroCarousel() {
   }, [count]);
 
   return (
-    <div className="relative h-full min-h-136 w-full overflow-hidden rounded-md">
+    <div className="relative h-full min-h-168 w-full overflow-hidden rounded-md">
       {/* Sliding image track */}
       <div
         className="flex h-full transition-transform duration-700 ease-out"
@@ -153,7 +153,16 @@ export function SignUpScreen() {
   };
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center px-4 py-8">
+    <div className="relative flex min-h-screen w-full items-center justify-center px-4 py-8">
+      {/* Hero image as a page background (small screens only) */}
+      <div className="absolute inset-0 lg:hidden">
+        <img
+          src={SLIDES[0].image}
+          alt=""
+          className="h-full w-full object-cover opacity-30"
+        />
+      </div>
+
       <div className="relative w-full max-w-6xl overflow-hidden rounded-md bg-white shadow-book">
         {/* Centered logo notch (large screens, sits over the seam) */}
         <div className="absolute left-1/2 top-0 z-10 hidden -translate-x-1/2 lg:flex">
