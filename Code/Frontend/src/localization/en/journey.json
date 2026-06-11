@@ -25,5 +25,33 @@
   "creating": "Creating your journey...",
   "fetchingWeather": "Fetching weather...",
   "poisCached": "POIs cached",
-  "generatingDay": "Generating Day {{day}}..."
+  "generatingDay": "Generating Day {{day}}...",
+  "compose": {
+    "greeting": "Hey {{name}}, where are we going today?",
+    "greetingFallback": "Hey there, where are we going today?",
+    "subtitle": "Live prices, all in one place, and a human expert when you need one.",
+    "placeholder": "Ask anything...",
+    "send": "Send",
+    "seeHow": "See how I can help you",
+    "tripDetails": "Trip details",
+    "destination": "Destination",
+    "destinationPlaceholder": "e.g. Japan",
+    "days": "Days",
+    "budget": "Budget",
+    "currency": "Currency",
+    "travelStyle": "Travel style",
+    "interests": "Interests",
+    "starting": "Starting your journey...",
+    "startError": "We couldn't start your journey. Please try again.",
+    "suggestNewTrip": "Create a new trip",
+    "suggestInspire": "Inspire me where to go",
+    "suggestRoadTrip": "Plan a road trip",
+    "suggestEscape": "Plan a last-minute escape"
+  },
+  "active": {
+    "responseTitle": "Journey response",
+    "responseHint": "Raw JOURNEY_START response",
+    "newTrip": "New trip",
+    "you": "You"
+  }
 }

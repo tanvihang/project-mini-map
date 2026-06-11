@@ -25,5 +25,33 @@
   "creating": "正在创建你的旅程...",
   "fetchingWeather": "获取天气数据...",
   "poisCached": "POI 已缓存",
-  "generatingDay": "正在生成第 {{day}} 天..."
+  "generatingDay": "正在生成第 {{day}} 天...",
+  "compose": {
+    "greeting": "{{name}}，今天我们想去哪里？",
+    "greetingFallback": "你好，今天我们想去哪里？",
+    "subtitle": "实时价格，一站汇总，需要时还有真人专家为你服务。",
+    "placeholder": "问我任何问题...",
+    "send": "发送",
+    "seeHow": "看看我能帮你什么",
+    "tripDetails": "行程详情",
+    "destination": "目的地",
+    "destinationPlaceholder": "例如：日本",
+    "days": "天数",
+    "budget": "预算",
+    "currency": "货币",
+    "travelStyle": "旅行风格",
+    "interests": "兴趣",
+    "starting": "正在开启你的旅程...",
+    "startError": "无法开启旅程，请重试。",
+    "suggestNewTrip": "创建新行程",
+    "suggestInspire": "给我灵感去哪里",
+    "suggestRoadTrip": "规划自驾游",
+    "suggestEscape": "规划临时出游"
+  },
+  "active": {
+    "responseTitle": "旅程响应",
+    "responseHint": "JOURNEY_START 原始响应",
+    "newTrip": "新行程",
+    "you": "你"
+  }
 }

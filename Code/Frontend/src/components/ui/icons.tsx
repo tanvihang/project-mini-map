@@ -142,3 +142,43 @@ export function LogoutIcon({ className = "h-5 w-5", ...props }: IconProps) {
     </svg>
   );
 }
+
+export function PaperPlaneIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...props}>
+      <path d="M6 12L3.27 4.36a.6.6 0 01.82-.74l16.2 7.83a.6.6 0 010 1.08l-16.2 7.84a.6.6 0 01-.82-.74L6 12zm0 0h6" />
+    </svg>
+  );
+}
+
+export function PaperclipIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...props}>
+      <path d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+    </svg>
+  );
+}
+
+export function MicrophoneIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...props}>
+      <path d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+    </svg>
+  );
+}
+
+export function ArrowDownIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...props}>
+      <path d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+    </svg>
+  );
+}
+
+export function ArrowRightIcon({ className = "h-5 w-5", ...props }: IconProps) {
+  return (
+    <svg {...baseProps} className={className} {...props}>
+      <path d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+    </svg>
+  );
+}

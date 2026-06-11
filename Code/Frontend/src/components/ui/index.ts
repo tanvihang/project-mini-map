@@ -18,4 +18,9 @@ export {
   ChatBubbleIcon,
   DocumentIcon,
   LogoutIcon,
+  PaperPlaneIcon,
+  PaperclipIcon,
+  MicrophoneIcon,
+  ArrowDownIcon,
+  ArrowRightIcon,
 } from "./icons";
