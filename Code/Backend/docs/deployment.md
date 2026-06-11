@@ -197,7 +197,7 @@ cd Code/Backend
 
 PROJECT=$(gcloud config get-value project)
 
-gcloud builds submit --tag gcr.io/$PROJECT/minimap-backend
+gcloud builds submit --tag gcr.io/$PROJECT/minimap-backend-v2
 ```
 
 Wait for the build to complete (first time takes a few minutes).
@@ -213,8 +213,8 @@ gcloud container images list --repository=gcr.io/$PROJECT
 ```bash
 PROJECT=$(gcloud config get-value project)
 
-gcloud run deploy minimap-backend \
-  --image gcr.io/$PROJECT/minimap-backend \
+gcloud run deploy minimap-backend-v2 \
+  --image gcr.io/$PROJECT/minimap-backend-v2 \
   --region us-central1 \
   --platform managed \
   --allow-unauthenticated \
@@ -227,13 +227,13 @@ gcloud run deploy minimap-backend \
 After deployment, the CLI prints your service URL:
 
 ```
-Service URL: https://minimap-backend-xxxxx-uc.a.run.app
+Service URL: https://minimap-backend-v2-xxxxx-uc.a.run.app
 ```
 
 ## Step 11: Verify the Deployed Service
 
 ```bash
-SERVICE_URL=$(gcloud run services describe minimap-backend \
+SERVICE_URL=$(gcloud run services describe minimap-backend-v2 \
   --region us-central1 \
   --format='value(status.url)')
 
@@ -292,23 +292,23 @@ Also verify the Vertex AI API is enabled (Step 3).
 
 ```bash
 # View service logs
-gcloud run services logs read minimap-backend --region us-central1
+gcloud run services logs read minimap-backend-v2 --region us-central1
 
 # Tail logs in real-time
-gcloud run services logs tail minimap-backend --region us-central1
+gcloud run services logs tail minimap-backend-v2 --region us-central1
 
 # Update environment variables
-gcloud run services update minimap-backend --region us-central1 \
+gcloud run services update minimap-backend-v2 --region us-central1 \
   --set-env-vars KEY1=val1,KEY2=val2
 
 # Deploy a new version
-gcloud builds submit --tag gcr.io/$PROJECT/minimap-backend
-gcloud run deploy minimap-backend \
-  --image gcr.io/$PROJECT/minimap-backend \
+gcloud builds submit --tag gcr.io/$PROJECT/minimap-backend-v2
+gcloud run deploy minimap-backend-v2 \
+  --image gcr.io/$PROJECT/minimap-backend-v2 \
   --region us-central1
 
 # Delete the service (stops all charges)
-gcloud run services delete minimap-backend --region us-central1
+gcloud run services delete minimap-backend-v2 --region us-central1
 
 # View deployed revision
 gcloud run revisions list --region us-central1
